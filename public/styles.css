@@ -375,6 +375,14 @@ html, body {
   font-style: italic;
 }
 
+/* .empty-note's pale color is tuned for the dark side panels it normally
+   sits on. The build-out modal has a light parchment background, so the
+   same color there is close to invisible, reused for build-idea error
+   text, that made failures look like nothing happened at all. */
+.modal .empty-note {
+  color: var(--ink-soft);
+}
+
 /* My World */
 .profile-grid {
   display: grid;

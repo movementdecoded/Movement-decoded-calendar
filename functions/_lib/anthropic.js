@@ -30,6 +30,12 @@ export async function callAnthropicJSON(env, { system, userMessage, maxTokens = 
     body: JSON.stringify({
       model,
       max_tokens: maxTokens,
+      // Sonnet 5 runs adaptive extended thinking by default, even with no
+      // `thinking` param sent at all. Left on, thinking silently ate the
+      // entire max_tokens budget (stop_reason "max_tokens", zero text
+      // returned) for this plain structured-JSON use case. We don't need
+      // reasoning depth here, so disable it explicitly.
+      thinking: { type: "disabled" },
       system,
       messages: [{ role: "user", content: userMessage }],
     }),
@@ -45,6 +51,12 @@ export async function callAnthropicJSON(env, { system, userMessage, maxTokens = 
     .filter((block) => block.type === "text")
     .map((block) => block.text)
     .join("");
+
+  if (!raw.trim()) {
+    throw new Error(
+      `Anthropic response had no text content (stop_reason: ${data.stop_reason || "unknown"}).`
+    );
+  }
 
   return parseModelJSON(raw);
 }

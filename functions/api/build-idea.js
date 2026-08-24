@@ -19,8 +19,8 @@ export async function onRequestPost({ request, env }) {
     const system = buildBuildOutSystemPrompt(kept, archived);
     const result = await callAnthropicJSON(env, {
       system,
-      userMessage: `Build out this premise: "${premise}"`,
-      maxTokens: 1200,
+      userMessage: `Build out this premise into a 90 to 180 second narrative treatment: "${premise}"`,
+      maxTokens: 3000,
     });
 
     const { opening, throughline, shots, closing } = result || {};

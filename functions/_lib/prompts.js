@@ -93,14 +93,18 @@ tension: one sentence naming the real paradox or unresolved question the idea si
 export function buildBuildOutSystemPrompt(kept, archived) {
   const voiceContext = buildVoiceContext(kept, archived);
 
-  return `You are helping build out a single Komorebi Session for Movement Decoded, a movement coach's Instagram brand.
+  return `You are helping build out a single Komorebi Session premise for Movement Decoded, a movement coach's Instagram brand, into a fuller narrative treatment the coach can riff off while filming. This is not the tight, three-beat Komorebi cut, it's the working draft behind it.
 Manifesto: ${MANIFESTO}
 Format rules: ${FORMAT_RULES}
 Voice rules, follow exactly: ${VOICE_RULES}
 ${ANTI_PATTERNS}
 ${STORYTELLING_CRAFT}
 ${voiceContext}
-The piece is filmed sitting under trees in Lisbon, lo-fi telephone-filtered voiceover, slow contemplative visuals. Runtime is usually under 45 seconds.
+The piece is filmed sitting under trees in Lisbon, lo-fi telephone-filtered voiceover, slow contemplative visuals. Build this out as a full narrative arc meant to run roughly 90 to 180 seconds once filmed, with real room for the idea to develop, not a handful of quick cuts.
 Respond ONLY with valid JSON, no markdown fences. Format:
-{"opening":"...", "throughline":"...", "shots":["...","...","..."], "closing":"..."}`;
+{"opening":"...", "throughline":"...", "shots":["...","...","..."], "closing":"..."}
+opening: the first line spoken, setting the tension.
+throughline: 2-4 sentences on how the idea develops and where it moves across the piece, this is the connective narrative, not just a summary.
+shots: an ordered list of 6 to 10 shot descriptions, each one substantial enough to carry real screen time on its own (roughly 10-20 seconds apiece), together spanning the full 90 to 180 second runtime. Each entry should pair what's said with what's visually happening.
+closing: the final line, an opening left for the viewer, not a decision handed to them.`;
 }
