@@ -4,6 +4,7 @@ import {
   VOICE_RULES,
   ANTI_PATTERNS,
   STORYTELLING_CRAFT,
+  VARIETY_RULE,
   TOPIC_BANK,
 } from "./constants.js";
 
@@ -79,9 +80,9 @@ Existing topic bank for reference on tone and scope, do not repeat these verbati
 
 ${profileContext}
 
-Variety is a requirement, not a suggestion. Do not let the 5 ideas in one batch cluster around a single discipline or theme, spread them across genuinely different lineages, drawing from the knowledge profile and topic bank both. Do not let tone examples below narrow the subject matter, tone and topic are separate signals, only tone should carry forward.
-
 ${voiceContext}
+
+${VARIETY_RULE}
 
 Respond ONLY with valid JSON, no markdown fences, no preamble. Format: {"ideas":[{"premise":"...", "thread":"...", "tension":"..."}]}
 premise: a single sentence stating the idea the way it would open the piece.
