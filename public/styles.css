@@ -431,6 +431,13 @@ html, body {
   z-index: 50;
 }
 
+/* [hidden] and .modal-backdrop are equal specificity, and author CSS beats
+   the UA stylesheet on a tie, so display:flex above wins over [hidden]'s
+   display:none unless we say so explicitly here. */
+.modal-backdrop[hidden] {
+  display: none;
+}
+
 .modal {
   background: var(--card-parchment);
   color: var(--ink);
