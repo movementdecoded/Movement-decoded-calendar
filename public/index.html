@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Movement Decoded — Content Calendar</title>
+<link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">MOVEMENT DECODED</span>
+      <span class="brand-sub">Content calendar &amp; idea lab</span>
+    </div>
+  </header>
+
+  <!-- 1. Content Calendar -->
+  <section class="panel calendar-panel" id="calendar-section">
+    <div class="panel-head">
+      <h1>Content Calendar</h1>
+      <div class="week-nav">
+        <button class="btn btn-ghost" id="week-prev" aria-label="Previous week">&larr;</button>
+        <span class="week-label" id="week-label">Week of —</span>
+        <button class="btn btn-ghost" id="week-next" aria-label="Next week">&rarr;</button>
+        <button class="btn btn-ghost btn-today" id="week-today">Today</button>
+      </div>
+    </div>
+    <div class="calendar-grid" id="calendar-grid"></div>
+  </section>
+
+  <!-- 2. Komorebi Idea Lab -->
+  <section class="panel" id="idea-lab-section">
+    <div class="panel-head">
+      <h1>Komorebi Idea Lab</h1>
+      <button class="btn btn-primary" id="generate-btn">Generate ideas</button>
+    </div>
+    <p class="panel-hint">Five premises at a time. Keep what lands, set aside what might still spark, build out anything worth scripting.</p>
+    <div id="generate-status" class="status-line" hidden></div>
+    <div class="idea-grid" id="idea-grid"></div>
+  </section>
+
+  <!-- 3. Kept / Set Aside banks -->
+  <section class="panel">
+    <details class="collapsible" open>
+      <summary><h2>Kept ideas</h2><span class="count-badge" id="kept-count">0</span></summary>
+      <div class="idea-list" id="kept-list"></div>
+    </details>
+  </section>
+
+  <section class="panel">
+    <details class="collapsible">
+      <summary><h2>Set aside</h2><span class="count-badge" id="archived-count">0</span></summary>
+      <p class="panel-hint">Not rejected, just resting. Fully reversible.</p>
+      <div class="idea-list" id="archived-list"></div>
+    </details>
+  </section>
+
+  <!-- 4. My World -->
+  <section class="panel">
+    <details class="collapsible">
+      <summary><h2>My World</h2><span class="save-indicator" id="profile-save-indicator"></span></summary>
+      <p class="panel-hint">The primary driver of topic breadth in idea generation. The more specific, the wider the range of ideas.</p>
+      <div class="profile-grid">
+        <label class="field">
+          <span class="field-label">Disciplines</span>
+          <textarea id="profile-disciplines" rows="3" placeholder="What you practice, train, teach, study..."></textarea>
+        </label>
+        <label class="field">
+          <span class="field-label">Philosophies</span>
+          <textarea id="profile-philosophies" rows="3" placeholder="Frameworks, lineages, thinkers you draw from..."></textarea>
+        </label>
+        <label class="field">
+          <span class="field-label">Current obsessions</span>
+          <textarea id="profile-obsessions" rows="3" placeholder="What you can't stop thinking about right now..."></textarea>
+        </label>
+        <label class="field">
+          <span class="field-label">Inspirations</span>
+          <textarea id="profile-inspirations" rows="3" placeholder="People, work, moments that shaped how you see movement..."></textarea>
+        </label>
+        <label class="field field-wide">
+          <span class="field-label">Extra context</span>
+          <textarea id="profile-extra" rows="3" placeholder="Anything else worth feeding in..."></textarea>
+        </label>
+      </div>
+    </details>
+  </section>
+</div>
+
+<!-- Build-out modal -->
+<div class="modal-backdrop" id="build-modal-backdrop" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="build-modal-title">
+    <button class="modal-close" id="build-modal-close" aria-label="Close">&times;</button>
+    <div id="build-modal-body">
+      <p class="modal-premise" id="build-modal-title"></p>
+      <div class="modal-loading" id="build-modal-loading">Building it out&hellip;</div>
+      <div class="build-out" id="build-modal-content" hidden></div>
+    </div>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
