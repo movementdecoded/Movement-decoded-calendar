@@ -169,15 +169,36 @@ html, body {
 
 .btn-today { margin-left: 4px; }
 
+/* Two-week stack: current week on top, next week directly underneath, so
+   the upcoming week is always visible for planning without having to page
+   forward. Each block is its own labeled grid rather than one 14-card
+   grid, so the two weeks read as distinct rows, not one long strip. */
+.calendar-weeks {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  margin-top: 16px;
+}
+
+.calendar-week-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent-gold-dim);
+  margin-bottom: 8px;
+}
+
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  /* All 7 cards share one grid row; without this, expanding one card
-     (via tap) would stretch every card in the row to match its height
-     instead of letting the others stay compact. */
-  align-items: start;
+  /* Default (stretch) alignment: every card in a row fills the row's
+     height, so a day with more static content (Friday's note) doesn't
+     leave the rest of the row ragged. This relies on day-details (below)
+     being taken out of flow via position:absolute when expanded, so
+     opening one card's details no longer inflates the row height that
+     stretch measures everything else against. */
   gap: 10px;
-  margin-top: 16px;
 }
 
 @media (max-width: 860px) {
@@ -194,12 +215,19 @@ html, body {
   flex-direction: column;
   gap: 6px;
   position: relative;
-  border: 2px solid transparent;
+  border: 3px solid transparent;
 }
 
-.day-card.is-today { border-color: var(--accent-gold); }
+/* A visibly different border from every other card, so today reads at a
+   glance rather than needing the date number read closely. Paired with a
+   soft glow (rather than just a color swap) so it still stands out
+   against the gold accents used elsewhere in the UI. */
+.day-card.is-today {
+  border-color: var(--accent-gold);
+  box-shadow: 0 0 0 3px rgba(217, 178, 95, 0.28);
+}
 .day-card.is-expandable { cursor: pointer; }
-.day-card.expanded { min-height: 0; }
+.day-card.expanded { z-index: 6; }
 
 .day-head {
   display: flex;
@@ -297,20 +325,35 @@ html, body {
 .status-picker-btn.status-yellow { background: var(--status-yellow); }
 .status-picker-btn.status-green { background: var(--status-green); }
 
+/* Positioned as a dropdown below the card rather than laid out inline, so
+   expanding it never changes the day-card's own box height — that height
+   is what .calendar-grid's row-stretch alignment measures every card in
+   the row against, and letting it grow was what previously forced every
+   card in the row to stretch (or, with align-items:start, left the row
+   ragged instead). Default is display:none; the [hidden] attribute is
+   never fought on specificity here since display:flex is only ever set
+   by the :not([hidden]) rule below, not unconditionally on the base
+   class — sidesteps the same bug class as the modal backdrop elsewhere
+   in this app rather than needing an explicit [hidden] override. */
 .day-details {
-  display: flex;
+  display: none;
   flex-direction: column;
   gap: 8px;
   cursor: default;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 5;
+  background: var(--card-parchment);
+  border: 1px solid rgba(43, 38, 32, 0.15);
+  border-radius: 10px;
+  padding: 12px;
+  box-shadow: 0 10px 28px rgba(10, 12, 7, 0.35);
 }
 
-/* [hidden] and .day-details are equal CSS specificity, and author CSS
-   beats the UA stylesheet on a tie, so display:flex above would win over
-   [hidden]'s display:none unless overridden here — same bug class as the
-   modal backdrop elsewhere in this app, caught before it shipped this
-   time. */
-.day-details[hidden] {
-  display: none;
+.day-details:not([hidden]) {
+  display: flex;
 }
 
 .day-desc {
@@ -536,6 +579,73 @@ html, body {
 .field textarea:focus {
   outline: none;
   border-color: var(--accent-gold-dim);
+}
+
+.field input[type="text"] {
+  background: var(--bg-panel-raised);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--card-parchment);
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  padding: 10px;
+}
+
+.field input[type="text"]:focus {
+  outline: none;
+  border-color: var(--accent-gold-dim);
+}
+
+/* Published Content Log */
+.published-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.published-form .field-wide { grid-column: 1 / -1; }
+.published-form .btn { grid-column: 1 / -1; width: fit-content; }
+
+@media (max-width: 700px) {
+  .published-form { grid-template-columns: 1fr; }
+}
+
+.published-list {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.published-row {
+  background: var(--bg-panel-raised);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.published-row-main {
+  flex: 1;
+  min-width: 220px;
+}
+
+.published-row-title {
+  font-family: var(--font-serif);
+  font-size: 14.5px;
+  line-height: 1.4;
+}
+
+.published-row-topic {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--pillar-komorebi);
+  margin-top: 4px;
 }
 
 /* Modal */

@@ -1,4 +1,4 @@
-import { recentIdeas } from "../_lib/db.js";
+import { recentIdeas, recentPublishedContent } from "../_lib/db.js";
 import { buildBrainDumpSystemPrompt } from "../_lib/prompts.js";
 import { callAnthropicJSON, jsonResponse } from "../_lib/anthropic.js";
 import { validateScript } from "./build-script.js";
@@ -12,9 +12,12 @@ export async function onRequestPost({ request, env }) {
       return jsonResponse({ error: "text is required" }, { status: 400 });
     }
 
-    const kept = await recentIdeas(env.DB, 12);
+    const [kept, published] = await Promise.all([
+      recentIdeas(env.DB, 12),
+      recentPublishedContent(env.DB, 20),
+    ]);
 
-    const system = buildBrainDumpSystemPrompt(kept);
+    const system = buildBrainDumpSystemPrompt(kept, published);
     const result = await callAnthropicJSON(env, {
       system,
       userMessage: `Here is the raw brain dump. Find the script hiding inside it:\n\n${text}`,

@@ -26,7 +26,16 @@
         <button class="btn btn-ghost btn-today" id="week-today">Today</button>
       </div>
     </div>
-    <div class="calendar-grid" id="calendar-grid"></div>
+    <div class="calendar-weeks">
+      <div class="calendar-week">
+        <div class="calendar-week-label" id="calendar-week-label-current"></div>
+        <div class="calendar-grid" id="calendar-grid-current"></div>
+      </div>
+      <div class="calendar-week">
+        <div class="calendar-week-label" id="calendar-week-label-next"></div>
+        <div class="calendar-grid" id="calendar-grid-next"></div>
+      </div>
+    </div>
   </section>
 
   <!-- 2. Komorebi Idea Lab -->
@@ -89,7 +98,32 @@
     </details>
   </section>
 
-  <!-- 5. Komorebi topics already posted -->
+  <!-- 5. Published Content Log -->
+  <section class="panel">
+    <details class="collapsible" open>
+      <summary><h2>Published Content Log</h2><span class="count-badge" id="published-count">0</span></summary>
+      <p class="panel-hint">Log what's actually gone out — title, and the full script or caption text. New ideas and scripts pull from this: past topics so nothing repeats, and past scripts as a tone reference, the strongest voice signal there is since it's what actually posted, not a draft.</p>
+      <div class="published-form">
+        <label class="field">
+          <span class="field-label">Title</span>
+          <input type="text" id="published-title" placeholder="What it was called" />
+        </label>
+        <label class="field">
+          <span class="field-label">Topic</span>
+          <input type="text" id="published-topic" placeholder="What it was about, in a few words" />
+        </label>
+        <label class="field field-wide">
+          <span class="field-label">Script / full text</span>
+          <textarea id="published-script" rows="5" placeholder="Paste the full script or caption as it actually posted…"></textarea>
+        </label>
+        <button class="btn btn-primary" id="published-add-btn">Add to log</button>
+      </div>
+      <div id="published-status" class="status-line" hidden></div>
+      <div class="published-list" id="published-list"></div>
+    </details>
+  </section>
+
+  <!-- 6. Komorebi topics already posted -->
   <section class="panel">
     <h1>Komorebi topics already posted</h1>
     <p class="panel-hint">Reference only, so past topics don't get accidentally repeated.</p>

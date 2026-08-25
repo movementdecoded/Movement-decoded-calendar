@@ -135,6 +135,39 @@ export async function upsertCardStatus(db, entry_date, pillar, status, updated_a
     .run();
 }
 
+// A log of already-published content — a title, the topic it covers, and
+// the full script/text as it actually went out. Distinct from `ideas`:
+// this is confirmed-posted material, used to feed generation with real
+// topic history and real tone, not drafts.
+export async function listPublishedContent(db) {
+  const { results } = await db
+    .prepare("SELECT * FROM published_content ORDER BY created_at DESC")
+    .all();
+  return results || [];
+}
+
+export async function recentPublishedContent(db, limit = 20) {
+  const { results } = await db
+    .prepare("SELECT * FROM published_content ORDER BY created_at DESC LIMIT ?1")
+    .bind(limit)
+    .all();
+  return results || [];
+}
+
+export async function insertPublishedContent(db, { id, title, topic, script, created_at }) {
+  await db
+    .prepare(
+      "INSERT INTO published_content (id, title, topic, script, created_at) VALUES (?1, ?2, ?3, ?4, ?5)"
+    )
+    .bind(id, title, topic, script, created_at)
+    .run();
+}
+
+export async function deletePublishedContent(db, id) {
+  const res = await db.prepare("DELETE FROM published_content WHERE id = ?1").bind(id).run();
+  return res.meta && res.meta.changes > 0;
+}
+
 // Every Komorebi Sunday whose card status is "green" (posted), joined
 // against its saved topic text. Reference list only — nothing writes to
 // this, it's derived entirely from card_status + komorebi_topics.

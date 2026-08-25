@@ -47,6 +47,9 @@ functions/
                            per-card production status toggle
     posted-komorebi-topics.js  GET — every Komorebi topic whose card
                            status is "green" (posted), reference-only
+    published-content/index.js  GET (list), POST (log a title + topic +
+                           full script/text for something already posted)
+    published-content/[id].js   DELETE
     generate-ideas.js       POST — 5 new premises from Anthropic
     build-script.js         POST — five-part-arc script from a topic
                            (an idea's premise); also exports the shared
@@ -55,7 +58,8 @@ functions/
     brain-dump-script.js    POST — five-part-arc script found inside a raw,
                            unstructured brain dump, preserving its wording
 schema.sql                D1 schema, fresh-install baseline (ideas,
-                           profile, komorebi_topics, card_status)
+                           profile, komorebi_topics, card_status,
+                           published_content)
 migrations/                one-off SQL upgrades for an already-deployed
                            database — apply in order, once each
 wrangler.toml              Pages project config + D1 binding
@@ -184,6 +188,7 @@ push — D1 has no "run migrations on deploy" wiring here. Apply each file in
 ```
 wrangler d1 execute movement_decoded_db --remote --file=migrations/0002_remove_archived_status.sql
 wrangler d1 execute movement_decoded_db --remote --file=migrations/0003_five_part_arc_and_keep_script.sql
+wrangler d1 execute movement_decoded_db --remote --file=migrations/0004_published_content.sql
 ```
 
 No terminal needed either: paste the file's contents into the Cloudflare
@@ -195,17 +200,21 @@ upgrade path to get there.
 
 ## Data model
 
-See `schema.sql`. Four tables: `ideas` (the kept-idea bank — there's only
+See `schema.sql`. Five tables: `ideas` (the kept-idea bank — there's only
 one bank; a kept idea that doesn't work out is deleted rather than moved to
 an intermediate "Set Aside" state; `script` is a nullable JSON blob holding
 the full five-part script once one's been kept for that idea), `profile`
 (the five My World fields), `komorebi_topics` (one row per Sunday,
-person-chosen — the tool never auto-fills these from the topic bank), and
+person-chosen — the tool never auto-fills these from the topic bank),
 `card_status` (production status per calendar card, keyed by a single
 `card_key` of `"YYYY-MM-DD:pillar"` — the specific date + pillar, not just
-the pillar, since each week's occurrence tracks independently). Absence of
-a `card_status` row means `none` (not set, the default grey state),
-distinct from `red` (not started) — moving off grey is a deliberate action.
+the pillar, since each week's occurrence tracks independently), and
+`published_content` (a manually-logged record of what's actually gone out
+— `title`, `topic`, and the full `script`/caption text — fed into idea and
+script generation as both a repeat-avoidance list and a tone reference; see
+**Prompt design notes** below). Absence of a `card_status` row means `none`
+(not set, the default grey state), distinct from `red` (not started) —
+moving off grey is a deliberate action.
 
 ## Prompt design notes
 
@@ -225,6 +234,21 @@ manifesto, voice rules, anti-patterns, and storytelling-craft framework
 (including the deliberate "leave an opening, not a decision" closing
 principle, a departure from source frameworks that end on a call to
 decide).
+
+The **Published Content Log** (`published_content` table, filled in from
+its own panel on the page) feeds two more, separate signals into all three
+generation prompts (idea generation, Topic Builder, Brain Dump to Script):
+
+- **Repeat-avoidance**: every logged `topic` is listed as already-covered
+  ground, so new ideas find adjacent angles or build further on what's
+  already out, instead of accidentally retreading it.
+- **Tone**, from the last few logged `script` texts (capped per-entry to
+  keep a handful of full examples from dominating the prompt). This is
+  weighted above the kept-ideas tone example, since it's the voice as it
+  actually posted, not a draft.
+
+See `buildPublishedTopicsContext` / `buildPublishedToneContext` in
+`prompts.js`.
 
 ## Script builder: the five-part arc
 
@@ -275,7 +299,17 @@ from local data, no request, and with no Keep button (it's already kept).
 A script that's never kept is otherwise ephemeral — shown once, not written
 to D1 until you keep it.
 
-## Calendar cards: status toggle + tap to expand
+## Calendar cards: two-week view, status toggle, tap to expand
+
+The calendar always shows **two weeks stacked vertically** — whichever week
+`currentMonday` points at on top, the week directly after it underneath —
+so the upcoming week is visible for planning (gearing up ideas/scripts/time)
+without paging forward. Prev/next shift the whole pair by a week; "Today"
+resets the pair so the top block is the actual current week again. Each
+block's own label says "This week" / "Next week" / "Last week" / a plain
+date range, computed relative to today's actual week rather than to
+wherever the nav currently sits, so it never mislabels itself while
+browsing other weeks.
 
 Each pillar day (Collage/Haiku/Komorebi, plus Carousel on alternating bonus
 Mondays) shows only its pillar title by default. Two separate interactions:
@@ -285,12 +319,20 @@ Mondays) shows only its pillar title by default. Two separate interactions:
   started (red) → drafted/filmed (orange) → scripted/scheduled (yellow) →
   posted (green) → back to none. Persisted per exact date + pillar
   (`card_key`) in `card_status`.
-- **Tapping the card body** (anywhere but the status dot) expands it to
-  show that pillar's fixed description, that week's topic for Sunday
-  specifically, and the same status choice again as five labeled buttons
-  (rather than a color-coded dot) for accessibility. Tapping the card again
-  collapses it. There's no script-building trigger on the calendar itself —
-  that only happens from a kept idea or Brain Dump, see above.
+- **Tapping the card body** (anywhere but the status dot) expands a dropdown
+  panel below it showing that pillar's fixed description, that week's topic
+  for Sunday specifically, and the same status choice again as five labeled
+  buttons (rather than a color-coded dot) for accessibility. Tapping the
+  card again collapses it. The panel is positioned absolutely (not laid out
+  inline), so opening it never changes the card's own box height — that
+  matters because every card in a row otherwise stretches to match the
+  tallest one (uniform sizing, so e.g. Friday's longer note doesn't leave
+  the row ragged), and an inline-expanding panel would have dragged every
+  other card in that row open with it. There's no script-building trigger
+  on the calendar itself — that only happens from a kept idea or Brain
+  Dump, see above.
+- **Today's card** gets a visibly different border (gold, with a soft glow)
+  from every other card, so today is identifiable at a glance.
 
 Marking a Komorebi Sunday's status "posted" (green) is what makes its topic
 show up in **Komorebi topics already posted** at the bottom of the page —
@@ -313,6 +355,15 @@ nothing new to fill in.
 6. Paste something into Brain Dump to Script, generate, keep it, confirm it
    appears in Kept ideas titled with the script's own generated title
 7. Fill in a My World field and wait for the autosave indicator
-8. Reload the page (or open it on a different device) and confirm the
-   persisted state (ideas, kept scripts, topics, card statuses, profile)
-   came back — an unkept script is ephemeral by design and won't persist
+8. Log an entry in the Published Content Log (title, topic, full script
+   text), then generate a fresh batch of ideas or build a script and
+   confirm the model avoids that logged topic and leans toward that script's
+   tone
+9. Confirm the calendar shows two weeks stacked (current on top, next
+   underneath), that navigating with prev/next/Today relabels each block
+   correctly, and that every card in a row is the same height even when one
+   day (e.g. Friday) has more static content than its neighbors
+10. Reload the page (or open it on a different device) and confirm the
+    persisted state (ideas, kept scripts, topics, card statuses, profile,
+    published content log) came back — an unkept script is ephemeral by
+    design and won't persist

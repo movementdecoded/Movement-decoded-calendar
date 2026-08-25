@@ -72,9 +72,51 @@ export function buildVoiceContext(kept) {
   );
 }
 
-export function buildGenerateSystemPrompt(profileRows, kept) {
+// published: array of {title, topic, script, created_at} rows from the
+// published_content table — content that's actually gone out, as opposed
+// to `kept`, which is only drafted/scripted. Repeat-avoidance signal only:
+// what's already been covered, so new ideas find adjacent ground instead
+// of retreading it. Tone comes from buildPublishedToneContext instead,
+// kept as a separate function since the two get placed differently
+// relative to each prompt's other voice-example context.
+export function buildPublishedTopicsContext(published) {
+  const list = (published || []).slice(0, 30);
+  if (list.length === 0) return "";
+
+  return (
+    "Topics already published, treat as covered ground, do not repeat these, find adjacent but distinct angles or build further on them instead:\n" +
+    list.map((p) => `- ${p.topic}`).join("\n")
+  );
+}
+
+// Same source, opposite purpose: real published writing as a tone
+// reference, which is a stronger voice signal than an unpublished premise
+// since it's exactly what actually went out, not a draft. Each script is
+// capped to keep a handful of full examples from dominating the token
+// budget the way many short premises don't.
+const PUBLISHED_SCRIPT_EXCERPT_CHARS = 1200;
+
+export function buildPublishedToneContext(published) {
+  const list = (published || []).slice(0, 6);
+  if (list.length === 0) return "";
+
+  const excerpt = (text) =>
+    text.length > PUBLISHED_SCRIPT_EXCERPT_CHARS
+      ? text.slice(0, PUBLISHED_SCRIPT_EXCERPT_CHARS).trim() + "…"
+      : text;
+
+  return (
+    "IMPORTANT: the published scripts below are the strongest tone reference available, this is the voice as it actually went out, not a draft. Weight how directly it speaks, its restraint, its rhythm, above any other voice example. Ignore their subject matter entirely, do not treat what they happen to be about as a signal to repeat that topic.\n\n" +
+    "Already-published scripts, for tone only:\n" +
+    list.map((p) => `Title: ${p.title}\n${excerpt(p.script)}`).join("\n\n---\n\n")
+  );
+}
+
+export function buildGenerateSystemPrompt(profileRows, kept, published) {
   const profileContext = buildProfileContext(profileRows);
   const voiceContext = buildVoiceContext(kept);
+  const publishedTopicsContext = buildPublishedTopicsContext(published);
+  const publishedToneContext = buildPublishedToneContext(published);
 
   return `You are helping generate Komorebi Session premises for a movement coach's Instagram brand called Movement Decoded.
 Manifesto: ${MANIFESTO}
@@ -88,6 +130,10 @@ ${profileContext}
 
 ${voiceContext}
 
+${publishedToneContext}
+
+${publishedTopicsContext}
+
 ${VARIETY_RULE}
 
 Respond ONLY with valid JSON, no markdown fences, no preamble. Format: {"ideas":[{"premise":"...", "thread":"...", "tension":"..."}]}
@@ -98,8 +144,9 @@ tension: one sentence naming the real paradox or unresolved question the idea si
 
 // Topic Builder: turns a Komorebi Session topic (an idea's premise, or a
 // calendar Sunday's topic text) into a full five-part script.
-export function buildScriptSystemPrompt(kept) {
+export function buildScriptSystemPrompt(kept, published) {
   const voiceContext = buildVoiceContext(kept);
+  const publishedToneContext = buildPublishedToneContext(published);
 
   return `You are building a script for a single Komorebi Session for Movement Decoded, a movement coach's Instagram brand, from a topic.
 Manifesto: ${MANIFESTO}
@@ -109,6 +156,7 @@ ${ANTI_PATTERNS}
 ${STORYTELLING_CRAFT}
 ${FIVE_PART_ARC}
 ${voiceContext}
+${publishedToneContext}
 The piece is filmed sitting under trees in Lisbon, lo-fi telephone-filtered voiceover, slow contemplative visuals. The five part arc above, not the short-cut framing in the format rules, is the actual shape to follow here, it needs real room to develop across the full 90 to 180 seconds.
 ${SCRIPT_RESPONSE_FORMAT}`;
 }
@@ -116,8 +164,9 @@ ${SCRIPT_RESPONSE_FORMAT}`;
 // Brain Dump to Script: finds the script already hiding inside a raw,
 // unstructured stream-of-consciousness dump, preserving the person's own
 // language rather than rewriting it.
-export function buildBrainDumpSystemPrompt(kept) {
+export function buildBrainDumpSystemPrompt(kept, published) {
   const voiceContext = buildVoiceContext(kept);
+  const publishedToneContext = buildPublishedToneContext(published);
 
   return `You are turning a raw, messy, stream of consciousness brain dump into a script for a Komorebi Session for Movement Decoded, a movement coach's Instagram brand.
 Manifesto: ${MANIFESTO}
@@ -126,6 +175,7 @@ Voice rules, follow exactly: ${VOICE_RULES}
 ${ANTI_PATTERNS}
 ${FIVE_PART_ARC}
 ${voiceContext}
+${publishedToneContext}
 First identify the core reframe hiding in the brain dump, the central thing being seen differently, that is the spine of the script. Then build it into the five part arc above.
 Preserve as much of the original language and phrasing as possible. Do not paraphrase, clean up, or improve the wording. If the person wrote something in a particular way, keep it. The goal is to find the shape already in their words, not to rewrite the content.
 The piece is filmed sitting under trees in Lisbon, lo-fi telephone-filtered voiceover, slow contemplative visuals, running roughly 90 to 180 seconds.

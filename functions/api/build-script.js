@@ -1,4 +1,4 @@
-import { recentIdeas } from "../_lib/db.js";
+import { recentIdeas, recentPublishedContent } from "../_lib/db.js";
 import { buildScriptSystemPrompt } from "../_lib/prompts.js";
 import { callAnthropicJSON, jsonResponse } from "../_lib/anthropic.js";
 
@@ -13,9 +13,12 @@ export async function onRequestPost({ request, env }) {
       return jsonResponse({ error: "topic is required" }, { status: 400 });
     }
 
-    const kept = await recentIdeas(env.DB, 12);
+    const [kept, published] = await Promise.all([
+      recentIdeas(env.DB, 12),
+      recentPublishedContent(env.DB, 20),
+    ]);
 
-    const system = buildScriptSystemPrompt(kept);
+    const system = buildScriptSystemPrompt(kept, published);
     const result = await callAnthropicJSON(env, {
       system,
       userMessage: `Build a script from this topic: "${topic}"`,

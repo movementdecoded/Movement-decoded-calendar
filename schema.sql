@@ -30,6 +30,22 @@ CREATE TABLE IF NOT EXISTS komorebi_topics (
   topic TEXT
 );
 
+-- A log of content that's actually gone out, distinct from `ideas` (which
+-- is drafted/scripted but not necessarily posted). Two things get pulled
+-- from this at generation time: `topic` so new ideas don't retread
+-- already-published ground, and `script` as a tone reference, since it's
+-- real published writing rather than an unpublished premise.
+CREATE TABLE IF NOT EXISTS published_content (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  topic TEXT NOT NULL,
+  script TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_published_content_created
+  ON published_content (created_at DESC);
+
 -- Production status per calendar card, keyed by the specific date + pillar
 -- (not just the pillar, since each week's occurrence tracks independently)
 -- combined into one key: "YYYY-MM-DD:pillar_kind". Absence of a row means

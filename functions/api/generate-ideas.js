@@ -1,15 +1,16 @@
-import { getProfileRows, recentIdeas } from "../_lib/db.js";
+import { getProfileRows, recentIdeas, recentPublishedContent } from "../_lib/db.js";
 import { buildGenerateSystemPrompt } from "../_lib/prompts.js";
 import { callAnthropicJSON, jsonResponse } from "../_lib/anthropic.js";
 
 export async function onRequestPost({ env }) {
   try {
-    const [profileRows, kept] = await Promise.all([
+    const [profileRows, kept, published] = await Promise.all([
       getProfileRows(env.DB),
       recentIdeas(env.DB, 12),
+      recentPublishedContent(env.DB, 20),
     ]);
 
-    const system = buildGenerateSystemPrompt(profileRows, kept);
+    const system = buildGenerateSystemPrompt(profileRows, kept, published);
     const result = await callAnthropicJSON(env, {
       system,
       userMessage: "Generate 5 Komorebi Session ideas now.",

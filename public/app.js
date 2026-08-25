@@ -55,6 +55,18 @@
     return `${left} – ${right}`;
   }
 
+  // Labels a stacked week block relative to today's actual week, not just
+  // relative to wherever the prev/next nav currently sits, so "This week"
+  // only ever says that when it's true and otherwise falls back to a plain
+  // date range instead of lying.
+  function weekContextLabel(monday, todayMonday) {
+    const diffWeeks = Math.round((monday - todayMonday) / (7 * DAY_MS));
+    if (diffWeeks === 0) return "This week";
+    if (diffWeeks === 1) return "Next week";
+    if (diffWeeks === -1) return "Last week";
+    return diffWeeks > 0 ? `In ${diffWeeks} weeks` : `${Math.abs(diffWeeks)} weeks ago`;
+  }
+
   // ---------- Fixed rhythm ----------
 
   const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -146,21 +158,53 @@
 
   // ---------- Calendar ----------
 
+  // The visible span is always a pair of weeks — currentMonday's week on
+  // top, the week directly after it underneath — so there's always
+  // visibility into the upcoming week for planning, not just the one in
+  // progress. Prev/next still shift the whole pair by a week; "Today"
+  // resets it so the top block is the actual current week again.
   let currentMonday = mondayOf(new Date());
 
   const weekLabelEl = document.getElementById("week-label");
-  const calendarGridEl = document.getElementById("calendar-grid");
+  const weekLabelCurrentEl = document.getElementById("calendar-week-label-current");
+  const weekLabelNextEl = document.getElementById("calendar-week-label-next");
+  const calendarGridCurrentEl = document.getElementById("calendar-grid-current");
+  const calendarGridNextEl = document.getElementById("calendar-grid-next");
+
+  function renderWeekGrid(gridEl, monday, todayISO, statuses, topics) {
+    gridEl.innerHTML = "";
+    const carouselWeek = isCarouselMonday(monday);
+    WEEKDAY_LABELS.forEach((label, i) => {
+      const date = addDays(monday, i);
+      const iso = toISODate(date);
+      const pillar = pillarForDay(label, carouselWeek);
+      gridEl.appendChild(
+        buildDayCard({ label, date, iso, pillar, isToday: iso === todayISO, statuses, topics })
+      );
+    });
+  }
 
   async function renderCalendar() {
-    weekLabelEl.textContent = `Week of ${formatWeekLabel(currentMonday)}`;
-    calendarGridEl.innerHTML = "";
+    const nextMonday = addDays(currentMonday, 7);
+    const todayMonday = mondayOf(new Date());
 
-    const mondayISO = toISODate(currentMonday);
-    const sundayISO = toISODate(addDays(currentMonday, 6));
+    weekLabelEl.textContent = `${formatWeekLabel(currentMonday)} – ${addDays(nextMonday, 6).toLocaleDateString(
+      undefined,
+      { ...WEEK_LABEL_FMT, year: "numeric" }
+    )}`;
+    weekLabelCurrentEl.textContent = `${weekContextLabel(currentMonday, todayMonday)} — ${formatWeekLabel(
+      currentMonday
+    )}`;
+    weekLabelNextEl.textContent = `${weekContextLabel(nextMonday, todayMonday)} — ${formatWeekLabel(nextMonday)}`;
+
+    const rangeStartISO = toISODate(currentMonday);
+    const rangeEndISO = toISODate(addDays(currentMonday, 13));
+    const firstSundayISO = toISODate(addDays(currentMonday, 6));
+    const secondSundayISO = toISODate(addDays(currentMonday, 13));
 
     let topics = {};
     try {
-      const data = await api.get(`/api/komorebi-topics?start=${sundayISO}&end=${sundayISO}`);
+      const data = await api.get(`/api/komorebi-topics?start=${firstSundayISO}&end=${secondSundayISO}`);
       topics = data.topics || {};
     } catch (_) {
       // Non-fatal: calendar still renders without a saved topic.
@@ -168,23 +212,15 @@
 
     let statuses = {};
     try {
-      const data = await api.get(`/api/card-status?start=${mondayISO}&end=${sundayISO}`);
+      const data = await api.get(`/api/card-status?start=${rangeStartISO}&end=${rangeEndISO}`);
       statuses = data.statuses || {};
     } catch (_) {
       // Non-fatal: cards fall back to "not started".
     }
 
     const todayISO = toISODate(new Date());
-    const carouselWeek = isCarouselMonday(currentMonday);
-
-    WEEKDAY_LABELS.forEach((label, i) => {
-      const date = addDays(currentMonday, i);
-      const iso = toISODate(date);
-      const pillar = pillarForDay(label, carouselWeek);
-      calendarGridEl.appendChild(
-        buildDayCard({ label, date, iso, pillar, isToday: iso === todayISO, statuses, topics })
-      );
-    });
+    renderWeekGrid(calendarGridCurrentEl, currentMonday, todayISO, statuses, topics);
+    renderWeekGrid(calendarGridNextEl, nextMonday, todayISO, statuses, topics);
   }
 
   function buildDayCard({ label, date, iso, pillar, isToday, statuses, topics }) {
@@ -375,6 +411,102 @@
       renderEmpty(postedTopicsListEl, "Couldn't load posted topics.");
     }
   }
+
+  // ---------- Published Content Log ----------
+
+  const publishedTitleEl = document.getElementById("published-title");
+  const publishedTopicEl = document.getElementById("published-topic");
+  const publishedScriptEl = document.getElementById("published-script");
+  const publishedAddBtn = document.getElementById("published-add-btn");
+  const publishedStatusEl = document.getElementById("published-status");
+  const publishedListEl = document.getElementById("published-list");
+  const publishedCountEl = document.getElementById("published-count");
+
+  function setPublishedStatus(msg, isError) {
+    if (!msg) {
+      publishedStatusEl.hidden = true;
+      return;
+    }
+    publishedStatusEl.hidden = false;
+    publishedStatusEl.textContent = msg;
+    publishedStatusEl.className = "status-line" + (isError ? " error" : "");
+  }
+
+  function publishedRow(item) {
+    const row = document.createElement("div");
+    row.className = "published-row";
+
+    const main = document.createElement("div");
+    main.className = "published-row-main";
+    const title = document.createElement("div");
+    title.className = "published-row-title";
+    title.textContent = item.title;
+    const topic = document.createElement("div");
+    topic.className = "published-row-topic";
+    topic.textContent = item.topic;
+    main.append(title, topic);
+
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "btn btn-small btn-danger";
+    removeBtn.textContent = "Remove";
+    removeBtn.addEventListener("click", async () => {
+      if (!confirm("Remove this entry from the log for good?")) return;
+      removeBtn.disabled = true;
+      try {
+        await api.send("DELETE", `/api/published-content/${item.id}`);
+        await loadPublishedContent();
+      } catch (err) {
+        setPublishedStatus(err.message, true);
+        removeBtn.disabled = false;
+      }
+    });
+
+    row.append(main, removeBtn);
+    return row;
+  }
+
+  async function loadPublishedContent() {
+    try {
+      const data = await api.get("/api/published-content");
+      const items = data.items || [];
+      publishedListEl.innerHTML = "";
+      publishedCountEl.textContent = items.length;
+      if (items.length === 0) {
+        renderEmpty(publishedListEl, "Nothing logged yet.");
+      } else {
+        items.forEach((item) => publishedListEl.appendChild(publishedRow(item)));
+      }
+    } catch (err) {
+      publishedListEl.innerHTML = "";
+      renderEmpty(publishedListEl, "Couldn't load the published content log.");
+    }
+  }
+
+  publishedAddBtn.addEventListener("click", async () => {
+    const title = publishedTitleEl.value.trim();
+    const topic = publishedTopicEl.value.trim();
+    const script = publishedScriptEl.value.trim();
+
+    if (!title || !topic || !script) {
+      setPublishedStatus("Title, topic, and script are all required.", true);
+      return;
+    }
+
+    publishedAddBtn.disabled = true;
+    setPublishedStatus("Saving…");
+    try {
+      await api.send("POST", "/api/published-content", { title, topic, script });
+      publishedTitleEl.value = "";
+      publishedTopicEl.value = "";
+      publishedScriptEl.value = "";
+      setPublishedStatus("");
+      await loadPublishedContent();
+    } catch (err) {
+      setPublishedStatus(err.message, true);
+    } finally {
+      publishedAddBtn.disabled = false;
+    }
+  });
 
   // ---------- Idea Lab ----------
 
@@ -734,4 +866,5 @@
   loadIdeas();
   loadProfile();
   loadPostedTopics();
+  loadPublishedContent();
 })();
