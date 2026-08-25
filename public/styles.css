@@ -15,6 +15,13 @@
   --pillar-komorebi: #7d6ba8;
   --pillar-carousel: #b5744a;
 
+  /* Card production status — deliberately a distinct palette from the
+     pillar colors above, since the two signals are independent. */
+  --status-not-started: #c1503f;
+  --status-drafted: #d98a3d;
+  --status-scripted: #d9b25f;
+  --status-posted: #6fae5a;
+
   --font-serif: "Iowan Old Style", "Palatino Linotype", Georgia, "Times New Roman", serif;
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
   --font-mono: "SF Mono", "IBM Plex Mono", Menlo, Consolas, monospace;
@@ -162,6 +169,10 @@ html, body {
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
+  /* All 7 cards share one grid row; without this, expanding one card
+     (via tap) would stretch every card in the row to match its height
+     instead of letting the others stay compact. */
+  align-items: start;
   gap: 10px;
   margin-top: 16px;
 }
@@ -174,16 +185,18 @@ html, body {
   background: var(--card-parchment);
   color: var(--ink);
   border-radius: 10px;
-  padding: 12px;
-  min-height: 150px;
+  padding: 10px;
+  min-height: 56px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   position: relative;
   border: 2px solid transparent;
 }
 
 .day-card.is-today { border-color: var(--accent-gold); }
+.day-card.is-expandable { cursor: pointer; }
+.day-card.expanded { min-height: 0; }
 
 .day-head {
   display: flex;
@@ -194,6 +207,9 @@ html, body {
   color: var(--ink-soft);
   text-transform: uppercase;
   letter-spacing: 0.06em;
+  /* Leaves room so the status toggle (absolute, top-right) never overlaps
+     the date number. */
+  padding-right: 22px;
 }
 
 .day-date { font-weight: 600; }
@@ -216,11 +232,53 @@ html, body {
 .pillar-tag.carousel { background: var(--pillar-carousel); }
 .pillar-tag.none { background: rgba(43, 38, 32, 0.12); color: var(--ink-soft); }
 
+/* Status toggle: a signal independent of the pillar color above, so it's
+   deliberately a different shape (small circle, top-right corner) rather
+   than another pill that could read as a second pillar tag. */
+.status-toggle {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  color: #fff;
+  font-size: 12px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.status-toggle.status-not_started { background: var(--status-not-started); }
+.status-toggle.status-drafted { background: var(--status-drafted); }
+.status-toggle.status-scripted { background: var(--status-scripted); }
+.status-toggle.status-posted { background: var(--status-posted); }
+
+.day-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  cursor: default;
+}
+
+/* [hidden] and .day-details are equal CSS specificity, and author CSS
+   beats the UA stylesheet on a tie, so display:flex above would win over
+   [hidden]'s display:none unless overridden here — same bug class as the
+   modal backdrop elsewhere in this app, caught before it shipped this
+   time. */
+.day-details[hidden] {
+  display: none;
+}
+
 .day-desc {
   font-family: var(--font-serif);
   font-size: 13.5px;
-  line-height: 1.4;
-  flex: 1;
+  line-height: 1.45;
+  margin: 0;
 }
 
 .day-note {
@@ -307,7 +365,7 @@ html, body {
   margin-top: 4px;
 }
 
-/* Kept / archived lists */
+/* Kept ideas list */
 .collapsible summary {
   list-style: none;
   cursor: pointer;
@@ -572,4 +630,34 @@ html, body {
 .brain-dump-input:focus {
   outline: none;
   border-color: var(--accent-gold-dim);
+}
+
+/* Komorebi topics already posted */
+.posted-topics-list {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.posted-topic-row {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.posted-topic-date {
+  flex: none;
+  width: 90px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent-gold-dim);
+}
+
+.posted-topic-text {
+  font-family: var(--font-serif);
+  font-size: 14px;
+  line-height: 1.4;
 }

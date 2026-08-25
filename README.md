@@ -32,23 +32,40 @@ functions/
     db.js                  D1 query helpers
     anthropic.js            Anthropic API client + response JSON parsing
   api/
-    ideas/index.js          GET (list by status), POST (create)
-    ideas/[id].js           PATCH (move status), DELETE (remove)
+    ideas/index.js          GET (list), POST (create) — the one idea bank;
+                           "Set Aside" was removed, delete is the only way
+                           a kept idea leaves the bank
+    ideas/[id].js           DELETE (remove)
     profile/index.js        GET, PUT (per-field upsert)
     komorebi-topics/index.js  GET, PUT (per-Sunday upsert)
+    card-status/index.js    GET (by date range), PUT (upsert) — the
+                           per-card production status toggle
+    posted-komorebi-topics.js  GET — every Komorebi topic whose card
+                           status is "posted", reference-only
     generate-ideas.js       POST — 5 new premises from Anthropic
     build-script.js         POST — five-part-arc script from a topic
                            (an idea's premise, or a calendar Sunday topic)
     brain-dump-script.js    POST — five-part-arc script found inside a raw,
                            unstructured brain dump, preserving its wording
-schema.sql                D1 schema (ideas, profile, komorebi_topics)
+schema.sql                D1 schema, fresh-install baseline (ideas,
+                           profile, komorebi_topics, card_status)
+migrations/                one-off SQL upgrades for an already-deployed
+                           database — apply in order, once each
 wrangler.toml              Pages project config + D1 binding
 ```
 
-## Deploy from scratch
+## Deploying
 
-Requires a Cloudflare account and the `wrangler` CLI (`npm install -g
-wrangler`, or use `npx wrangler`). Run these from the repo root.
+**Current setup: Cloudflare Pages is connected directly to this GitHub repo**
+(Git integration, configured in the dashboard under the Pages project's
+Settings → Builds & deployments). Every push to the production branch
+auto-deploys — no `wrangler pages deploy` needed, no terminal required after
+a change is pushed. D1 schema changes are the one thing Git integration
+doesn't cover — those still need a manual one-time SQL run, see
+**Migrations** below.
+
+The steps below are for setting the project up from scratch via the
+`wrangler` CLI instead, if you're not using Git integration.
 
 ### 1. Log in
 
@@ -134,18 +151,39 @@ echo "ANTHROPIC_API_KEY=sk-ant-..." > .dev.vars
 
 ## Redeploying after changes
 
+With Git integration connected (see **Deploying** above), pushing to the
+production branch is the whole redeploy step. Without it:
+
 ```
 wrangler pages deploy public
 ```
 
-Schema changes need a fresh `wrangler d1 execute ... --remote --file=schema.sql`
-(the CREATE TABLE statements use `IF NOT EXISTS`, so it's safe to re-run).
+## Migrations
+
+Schema changes to an already-deployed database aren't picked up by a code
+push — D1 has no "run migrations on deploy" wiring here. Apply each file in
+`migrations/` once, in order, against the live database:
+
+```
+wrangler d1 execute movement_decoded_db --remote --file=migrations/0002_remove_archived_status.sql
+```
+
+No terminal needed either: paste the file's contents into the Cloudflare
+dashboard under **Workers & Pages → D1 → movement_decoded_db → Console**
+and execute it there. `schema.sql` itself is safe to re-run any time (every
+`CREATE TABLE`/`CREATE INDEX` uses `IF NOT EXISTS`) — it's only needed for a
+brand-new database, since it reflects the current end state rather than the
+upgrade path to get there.
 
 ## Data model
 
-See `schema.sql`. Three tables: `ideas` (kept/archived Komorebi premises),
-`profile` (the five My World fields), `komorebi_topics` (one row per Sunday,
-person-chosen — the tool never auto-fills these from the topic bank).
+See `schema.sql`. Four tables: `ideas` (the kept-idea bank — there's only
+one bank; a kept idea that doesn't work out is deleted rather than moved to
+an intermediate "Set Aside" state), `profile` (the five My World fields),
+`komorebi_topics` (one row per Sunday, person-chosen — the tool never
+auto-fills these from the topic bank), and `card_status` (production status
+per calendar card, keyed by the specific date + pillar, not just the
+pillar, since each week's occurrence tracks independently).
 
 ## Prompt design notes
 
@@ -153,8 +191,10 @@ The idea generator deliberately separates two signals:
 
 - **Topic breadth** comes from the My World knowledge profile (primary) and
   the hardcoded 104-topic bank (secondary, for adjacent-but-distinct angles).
-- **Tone** comes from the last ~12 kept and ~12 archived ideas, explicitly
-  instructed to be read for voice only, never as a subject-matter signal.
+- **Tone** comes from the last ~12 kept ideas, explicitly instructed to be
+  read for voice only, never as a subject-matter signal. (There's only one
+  bank now — the original kept-vs-archived tone contrast went away when
+  "Set Aside" was removed; this is a single-signal example set instead.)
 
 This split is what stops the generator from turning into an echo chamber
 that just repeats whatever topic got kept recently — see
@@ -185,21 +225,41 @@ of interrupting it with inline labels. Ephemeral like everything else the AI
 generates here — nothing is written to D1 unless you copy it out yourself.
 
 - **Topic Builder** (`build-script.js`): triggered by the "Build script"
-  button on an idea card (kept, archived, or freshly generated) or on a
-  calendar Sunday's topic field. Both send a `topic` string to the same
-  endpoint.
+  button on an idea card (kept or freshly generated) or on a calendar
+  Sunday's topic field. Both send a `topic` string to the same endpoint.
 - **Brain Dump to Script** (`brain-dump-script.js`): its own panel under the
   Idea Lab. Paste raw, unstructured thinking; the prompt finds the core
   reframe already hiding in it and builds the five-part arc around it
   without paraphrasing your original wording.
 
+## Calendar cards: status toggle + tap to expand
+
+Each pillar day (Collage/Haiku/Komorebi, plus Carousel on alternating bonus
+Mondays) shows only its pillar title by default. Two separate interactions:
+
+- **The small circular arrow** (top-right corner) cycles a card's
+  production status independently of the pillar color: not started (red) →
+  drafted/filmed (orange) → scripted/scheduled (yellow) → posted (green) →
+  back to not started. Persisted per exact date + pillar in `card_status`.
+- **Tapping the card body** (anywhere but the status arrow) expands it to
+  show that pillar's description, and for Sunday specifically, the topic
+  editor and "Build script" button. Tapping again collapses it.
+
+Marking a Komorebi Sunday's status "posted" is what makes its topic show up
+in **Komorebi topics already posted** at the bottom of the page — that
+section is purely derived from `card_status` + `komorebi_topics`, nothing
+new to fill in.
+
 ## Testing the full loop
 
 1. Open the deployed URL, generate a batch of ideas
-2. Keep one, set another aside, build a script from a third
-3. Edit a Komorebi Sunday topic on the calendar, then build a script from it
-4. Paste something into Brain Dump to Script and check the result
-5. Fill in a My World field and wait for the autosave indicator
-6. Reload the page (or open it on a different device) and confirm the
-   persisted state (ideas, topics, profile) came back — scripts are
-   ephemeral by design and won't persist
+2. Keep one, build a script from it, then remove it
+3. On the calendar, tap a pillar day to expand its description, tap its
+   status arrow a few times to cycle colors, reload and confirm it stuck
+4. Edit a Komorebi Sunday's topic, cycle its status to "posted", and check
+   it shows up under Komorebi topics already posted
+5. Paste something into Brain Dump to Script and check the result
+6. Fill in a My World field and wait for the autosave indicator
+7. Reload the page (or open it on a different device) and confirm the
+   persisted state (ideas, topics, card statuses, profile) came back —
+   scripts themselves are ephemeral by design and won't persist

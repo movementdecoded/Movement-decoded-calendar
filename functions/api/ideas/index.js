@@ -1,22 +1,17 @@
 import { listIdeas, insertIdea } from "../../_lib/db.js";
 import { jsonResponse } from "../../_lib/anthropic.js";
 
-export async function onRequestGet({ request, env }) {
-  const url = new URL(request.url);
-  const status = url.searchParams.get("status") || "all";
-  const ideas = await listIdeas(env.DB, status);
+export async function onRequestGet({ env }) {
+  const ideas = await listIdeas(env.DB);
   return jsonResponse({ ideas });
 }
 
 export async function onRequestPost({ request, env }) {
   const body = await request.json().catch(() => ({}));
-  const { premise, thread, tension, status } = body;
+  const { premise, thread, tension } = body;
 
   if (!premise || typeof premise !== "string") {
     return jsonResponse({ error: "premise is required" }, { status: 400 });
-  }
-  if (status !== "kept" && status !== "archived") {
-    return jsonResponse({ error: "status must be 'kept' or 'archived'" }, { status: 400 });
   }
 
   const idea = {
@@ -24,7 +19,6 @@ export async function onRequestPost({ request, env }) {
     premise,
     thread: thread || "",
     tension: tension || "",
-    status,
     created_at: new Date().toISOString(),
   };
 

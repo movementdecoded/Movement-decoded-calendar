@@ -11,6 +11,14 @@
     ).padStart(2, "0")}`;
   }
 
+  // Parses a stored "YYYY-MM-DD" string as a local calendar date, not UTC
+  // midnight — `new Date(iso)` would shift the displayed day depending on
+  // the viewer's timezone offset.
+  function parseISODateLocal(iso) {
+    const [y, m, d] = iso.split("-").map(Number);
+    return new Date(y, m - 1, d);
+  }
+
   function startOfDay(d) {
     return new Date(d.getFullYear(), d.getMonth(), d.getDate());
   }
@@ -38,6 +46,7 @@
   }
 
   const WEEK_LABEL_FMT = { month: "short", day: "numeric" };
+  const POSTED_DATE_FMT = { month: "short", day: "numeric", year: "numeric" };
 
   function formatWeekLabel(monday) {
     const sunday = addDays(monday, 6);
@@ -48,15 +57,57 @@
 
   // ---------- Fixed rhythm ----------
 
-  const DAY_META = [
-    { label: "Mon", pillar: null },
-    { label: "Tue", pillar: "collage", cls: "collage", desc: "Collage. No script needed, post whatever's filmed." },
-    { label: "Wed", pillar: null },
-    { label: "Thu", pillar: "haiku", cls: "haiku", desc: "Physical Haikus. Minimal edit, just the movement." },
-    { label: "Fri", pillar: null, note: "Script &amp; film Sunday's Komorebi Session by today." },
-    { label: "Sat", pillar: null },
-    { label: "Sun", pillar: "komorebi", cls: "komorebi", desc: "Komorebi Session." },
-  ];
+  const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+  const PILLAR_INFO = {
+    collage: {
+      label: "Collage",
+      cls: "collage",
+      description:
+        "Intentionally shows the full spectrum and range of training, flexibility, strength, weights, coordination, games, tricking, floorwork, softness, tension, the cross-discipline nature of the practice",
+    },
+    haiku: {
+      label: "Haiku",
+      cls: "haiku",
+      description:
+        "Showcases movement flows and acrobatics, clips edited into a reel of soft acrobatics and dance",
+    },
+    komorebi: {
+      label: "Komorebi",
+      cls: "komorebi",
+      description:
+        "Short, sharp, a single idea stated clearly enough to land but open enough to breathe, no resolution, no prescription, filmed under trees in Lisbon",
+    },
+    carousel: {
+      label: "Carousel",
+      cls: "carousel",
+      description: "3 clips + the standard Lisbon workshop CTA slide, no stills needed, conversion-focused",
+    },
+  };
+
+  function pillarForDay(label, carouselWeek) {
+    if (label === "Tue") return "collage";
+    if (label === "Thu") return "haiku";
+    if (label === "Sun") return "komorebi";
+    if (label === "Mon" && carouselWeek) return "carousel";
+    return null;
+  }
+
+  // Production status, independent of the pillar's own color coding.
+  // Cycling order: not started -> drafted/filmed -> scripted/scheduled ->
+  // posted -> back to not started.
+  const STATUS_CYCLE = ["not_started", "drafted", "scripted", "posted"];
+  const STATUS_LABELS = {
+    not_started: "Hasn't started",
+    drafted: "Drafted / filmed",
+    scripted: "Scripted / scheduled",
+    posted: "Posted",
+  };
+
+  function nextStatus(current) {
+    const idx = STATUS_CYCLE.indexOf(current);
+    return STATUS_CYCLE[idx === -1 ? 0 : (idx + 1) % STATUS_CYCLE.length];
+  }
 
   // ---------- Tiny API client ----------
 
@@ -80,6 +131,13 @@
     },
   };
 
+  function renderEmpty(container, text) {
+    const p = document.createElement("p");
+    p.className = "empty-note";
+    p.textContent = text;
+    container.appendChild(p);
+  }
+
   // ---------- Calendar ----------
 
   let currentMonday = mondayOf(new Date());
@@ -91,110 +149,160 @@
     weekLabelEl.textContent = `Week of ${formatWeekLabel(currentMonday)}`;
     calendarGridEl.innerHTML = "";
 
+    const mondayISO = toISODate(currentMonday);
     const sundayISO = toISODate(addDays(currentMonday, 6));
+
     let topics = {};
     try {
-      const data = await api.get(
-        `/api/komorebi-topics?start=${sundayISO}&end=${sundayISO}`
-      );
+      const data = await api.get(`/api/komorebi-topics?start=${sundayISO}&end=${sundayISO}`);
       topics = data.topics || {};
     } catch (_) {
       // Non-fatal: calendar still renders without a saved topic.
     }
 
+    let statuses = {};
+    try {
+      const data = await api.get(`/api/card-status?start=${mondayISO}&end=${sundayISO}`);
+      statuses = data.statuses || {};
+    } catch (_) {
+      // Non-fatal: cards fall back to "not started".
+    }
+
     const todayISO = toISODate(new Date());
     const carouselWeek = isCarouselMonday(currentMonday);
 
-    DAY_META.forEach((meta, i) => {
+    WEEKDAY_LABELS.forEach((label, i) => {
       const date = addDays(currentMonday, i);
       const iso = toISODate(date);
-      const card = document.createElement("div");
-      card.className = "day-card" + (iso === todayISO ? " is-today" : "");
+      const pillar = pillarForDay(label, carouselWeek);
+      calendarGridEl.appendChild(
+        buildDayCard({ label, date, iso, pillar, isToday: iso === todayISO, statuses, topics })
+      );
+    });
+  }
 
-      const head = document.createElement("div");
-      head.className = "day-head";
-      head.innerHTML = `<span>${meta.label}</span><span class="day-date">${date.getDate()}</span>`;
-      card.appendChild(head);
+  function buildDayCard({ label, date, iso, pillar, isToday, statuses, topics }) {
+    const card = document.createElement("div");
+    card.className = "day-card" + (isToday ? " is-today" : "") + (pillar ? " is-expandable" : "");
 
-      if (meta.pillar) {
-        const tag = document.createElement("span");
-        tag.className = `pillar-tag ${meta.cls}`;
-        tag.textContent = meta.label === "Sun" ? "Komorebi" : meta.pillar === "collage" ? "Collage" : "Haikus";
-        card.appendChild(tag);
+    const head = document.createElement("div");
+    head.className = "day-head";
+    head.innerHTML = `<span>${label}</span><span class="day-date">${date.getDate()}</span>`;
+    card.appendChild(head);
 
-        const desc = document.createElement("div");
-        desc.className = "day-desc";
-        desc.textContent = meta.desc;
-        card.appendChild(desc);
-      } else if (meta.label === "Mon" && carouselWeek) {
-        const tag = document.createElement("span");
-        tag.className = "pillar-tag carousel";
-        tag.textContent = "Carousel (bonus)";
-        card.appendChild(tag);
-
-        const desc = document.createElement("div");
-        desc.className = "day-desc";
-        desc.textContent = "3 clips + the standard Lisbon-workshop CTA slide. No stills needed.";
-        card.appendChild(desc);
+    if (!pillar) {
+      if (label === "Fri") {
+        const note = document.createElement("div");
+        note.className = "day-note";
+        note.textContent = "Script & film Sunday's Komorebi Session by today.";
+        card.appendChild(note);
       } else {
         const tag = document.createElement("span");
         tag.className = "pillar-tag none";
         tag.textContent = "—";
         card.appendChild(tag);
       }
+      return card;
+    }
 
-      if (meta.note) {
-        const note = document.createElement("div");
-        note.className = "day-note";
-        note.innerHTML = meta.note;
-        card.appendChild(note);
+    const info = PILLAR_INFO[pillar];
+
+    const tag = document.createElement("span");
+    tag.className = `pillar-tag ${info.cls}`;
+    tag.textContent = info.label;
+    card.appendChild(tag);
+
+    // Status toggle — a separate signal from the pillar color above.
+    const statusKey = `${iso}|${pillar}`;
+    let currentStatus = statuses[statusKey] || "not_started";
+
+    const statusBtn = document.createElement("button");
+    statusBtn.type = "button";
+    statusBtn.setAttribute("aria-label", "Cycle production status");
+
+    const applyStatus = (status) => {
+      currentStatus = status;
+      statusBtn.className = `status-toggle status-${status}`;
+      statusBtn.title = `${STATUS_LABELS[status]} — tap to advance`;
+    };
+    applyStatus(currentStatus);
+    statusBtn.textContent = "›";
+
+    statusBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const previous = currentStatus;
+      const next = nextStatus(currentStatus);
+      applyStatus(next);
+      try {
+        await api.send("PUT", "/api/card-status", { entry_date: iso, pillar, status: next });
+        if (pillar === "komorebi") loadPostedTopics();
+      } catch (_) {
+        applyStatus(previous);
       }
-
-      if (meta.label === "Sun") {
-        const topicArea = document.createElement("textarea");
-        topicArea.className = "topic-input";
-        topicArea.rows = 2;
-        topicArea.placeholder = "This week's Komorebi topic…";
-        topicArea.value = topics[iso] || "";
-
-        const savedNote = document.createElement("div");
-        savedNote.className = "topic-saved";
-
-        const buildScriptBtn = document.createElement("button");
-        buildScriptBtn.className = "btn btn-small";
-        buildScriptBtn.textContent = "Build script";
-        buildScriptBtn.disabled = !topicArea.value.trim();
-        buildScriptBtn.addEventListener("click", () => {
-          const topic = topicArea.value.trim();
-          if (topic) buildScript(topic);
-        });
-
-        let saveTimer = null;
-        topicArea.addEventListener("input", () => {
-          savedNote.textContent = "";
-          buildScriptBtn.disabled = !topicArea.value.trim();
-          clearTimeout(saveTimer);
-          saveTimer = setTimeout(async () => {
-            try {
-              await api.send("PUT", "/api/komorebi-topics", {
-                sunday_date: iso,
-                topic: topicArea.value,
-              });
-              savedNote.textContent = "saved";
-              setTimeout(() => (savedNote.textContent = ""), 1500);
-            } catch (_) {
-              savedNote.textContent = "save failed";
-            }
-          }, 600);
-        });
-
-        card.appendChild(topicArea);
-        card.appendChild(buildScriptBtn);
-        card.appendChild(savedNote);
-      }
-
-      calendarGridEl.appendChild(card);
     });
+    card.appendChild(statusBtn);
+
+    // Tap-to-expand content: the pillar's description, plus (Sunday only)
+    // the topic editor and Build script button.
+    const details = document.createElement("div");
+    details.className = "day-details";
+    details.hidden = true;
+    // Interacting with anything inside the expanded panel (typing in the
+    // topic box, clicking Build script) shouldn't also collapse the card.
+    details.addEventListener("click", (e) => e.stopPropagation());
+
+    const desc = document.createElement("p");
+    desc.className = "day-desc";
+    desc.textContent = info.description;
+    details.appendChild(desc);
+
+    if (pillar === "komorebi") {
+      const topicArea = document.createElement("textarea");
+      topicArea.className = "topic-input";
+      topicArea.rows = 2;
+      topicArea.placeholder = "This week's Komorebi topic…";
+      topicArea.value = topics[iso] || "";
+
+      const savedNote = document.createElement("div");
+      savedNote.className = "topic-saved";
+
+      const buildScriptBtn = document.createElement("button");
+      buildScriptBtn.className = "btn btn-small";
+      buildScriptBtn.textContent = "Build script";
+      buildScriptBtn.disabled = !topicArea.value.trim();
+      buildScriptBtn.addEventListener("click", () => {
+        const topic = topicArea.value.trim();
+        if (topic) buildScript(topic);
+      });
+
+      let saveTimer = null;
+      topicArea.addEventListener("input", () => {
+        savedNote.textContent = "";
+        buildScriptBtn.disabled = !topicArea.value.trim();
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(async () => {
+          try {
+            await api.send("PUT", "/api/komorebi-topics", { sunday_date: iso, topic: topicArea.value });
+            savedNote.textContent = "saved";
+            loadPostedTopics();
+            setTimeout(() => (savedNote.textContent = ""), 1500);
+          } catch (_) {
+            savedNote.textContent = "save failed";
+          }
+        }, 600);
+      });
+
+      details.append(topicArea, buildScriptBtn, savedNote);
+    }
+
+    card.appendChild(details);
+
+    card.addEventListener("click", () => {
+      details.hidden = !details.hidden;
+      card.classList.toggle("expanded", !details.hidden);
+    });
+
+    return card;
   }
 
   document.getElementById("week-prev").addEventListener("click", () => {
@@ -209,6 +317,39 @@
     currentMonday = mondayOf(new Date());
     renderCalendar();
   });
+
+  // ---------- Komorebi topics already posted ----------
+
+  const postedTopicsListEl = document.getElementById("posted-topics-list");
+
+  async function loadPostedTopics() {
+    try {
+      const data = await api.get("/api/posted-komorebi-topics");
+      postedTopicsListEl.innerHTML = "";
+      if (!data.topics || data.topics.length === 0) {
+        renderEmpty(postedTopicsListEl, "Nothing posted yet.");
+        return;
+      }
+      data.topics.forEach((t) => {
+        const row = document.createElement("div");
+        row.className = "posted-topic-row";
+
+        const dateEl = document.createElement("span");
+        dateEl.className = "posted-topic-date";
+        dateEl.textContent = parseISODateLocal(t.date).toLocaleDateString(undefined, POSTED_DATE_FMT);
+
+        const topicEl = document.createElement("span");
+        topicEl.className = "posted-topic-text";
+        topicEl.textContent = t.topic;
+
+        row.append(dateEl, topicEl);
+        postedTopicsListEl.appendChild(row);
+      });
+    } catch (_) {
+      postedTopicsListEl.innerHTML = "";
+      renderEmpty(postedTopicsListEl, "Couldn't load posted topics.");
+    }
+  }
 
   // ---------- Idea Lab ----------
 
@@ -251,27 +392,12 @@
     keepBtn.addEventListener("click", async () => {
       keepBtn.disabled = true;
       try {
-        await api.send("POST", "/api/ideas", { ...idea, status: "kept" });
+        await api.send("POST", "/api/ideas", idea);
         card.remove();
-        await loadBanks();
+        await loadIdeas();
       } catch (err) {
         setStatus(err.message, true);
         keepBtn.disabled = false;
-      }
-    });
-
-    const setAsideBtn = document.createElement("button");
-    setAsideBtn.className = "btn btn-small";
-    setAsideBtn.textContent = "Set aside";
-    setAsideBtn.addEventListener("click", async () => {
-      setAsideBtn.disabled = true;
-      try {
-        await api.send("POST", "/api/ideas", { ...idea, status: "archived" });
-        card.remove();
-        await loadBanks();
-      } catch (err) {
-        setStatus(err.message, true);
-        setAsideBtn.disabled = false;
       }
     });
 
@@ -280,7 +406,7 @@
     buildBtn.textContent = "Build script";
     buildBtn.addEventListener("click", () => buildScript(idea.premise));
 
-    actions.append(keepBtn, setAsideBtn, buildBtn);
+    actions.append(keepBtn, buildBtn);
     card.append(thread, premise, tension, actions);
     return card;
   }
@@ -301,14 +427,12 @@
     }
   });
 
-  // ---------- Kept / Archived banks ----------
+  // ---------- Kept ideas ----------
 
   const keptListEl = document.getElementById("kept-list");
-  const archivedListEl = document.getElementById("archived-list");
   const keptCountEl = document.getElementById("kept-count");
-  const archivedCountEl = document.getElementById("archived-count");
 
-  function bankRow(idea, otherStatus) {
+  function bankRow(idea) {
     const row = document.createElement("div");
     row.className = "idea-row";
 
@@ -330,20 +454,6 @@
     buildBtn.textContent = "Build script";
     buildBtn.addEventListener("click", () => buildScript(idea.premise));
 
-    const moveBtn = document.createElement("button");
-    moveBtn.className = "btn btn-small";
-    moveBtn.textContent = otherStatus === "kept" ? "Move to kept" : "Move to set aside";
-    moveBtn.addEventListener("click", async () => {
-      moveBtn.disabled = true;
-      try {
-        await api.send("PATCH", `/api/ideas/${idea.id}`, { status: otherStatus });
-        await loadBanks();
-      } catch (err) {
-        setStatus(err.message, true);
-        moveBtn.disabled = false;
-      }
-    });
-
     const removeBtn = document.createElement("button");
     removeBtn.className = "btn btn-small btn-danger";
     removeBtn.textContent = "Remove";
@@ -352,46 +462,27 @@
       removeBtn.disabled = true;
       try {
         await api.send("DELETE", `/api/ideas/${idea.id}`);
-        await loadBanks();
+        await loadIdeas();
       } catch (err) {
         setStatus(err.message, true);
         removeBtn.disabled = false;
       }
     });
 
-    actions.append(buildBtn, moveBtn, removeBtn);
+    actions.append(buildBtn, removeBtn);
     row.append(main, actions);
     return row;
   }
 
-  function renderEmpty(container, text) {
-    const p = document.createElement("p");
-    p.className = "empty-note";
-    p.textContent = text;
-    container.appendChild(p);
-  }
-
-  async function loadBanks() {
+  async function loadIdeas() {
     try {
-      const [kept, archived] = await Promise.all([
-        api.get("/api/ideas?status=kept"),
-        api.get("/api/ideas?status=archived"),
-      ]);
-
+      const kept = await api.get("/api/ideas");
       keptListEl.innerHTML = "";
       keptCountEl.textContent = kept.ideas.length;
       if (kept.ideas.length === 0) {
         renderEmpty(keptListEl, "Nothing kept yet.");
       } else {
-        kept.ideas.forEach((idea) => keptListEl.appendChild(bankRow(idea, "archived")));
-      }
-
-      archivedListEl.innerHTML = "";
-      archivedCountEl.textContent = archived.ideas.length;
-      if (archived.ideas.length === 0) {
-        renderEmpty(archivedListEl, "Nothing set aside.");
-      } else {
-        archived.ideas.forEach((idea) => archivedListEl.appendChild(bankRow(idea, "kept")));
+        kept.ideas.forEach((idea) => keptListEl.appendChild(bankRow(idea)));
       }
     } catch (err) {
       setStatus(err.message, true);
@@ -551,6 +642,7 @@
   // ---------- Init ----------
 
   renderCalendar();
-  loadBanks();
+  loadIdeas();
   loadProfile();
+  loadPostedTopics();
 })();

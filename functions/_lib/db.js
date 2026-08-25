@@ -1,39 +1,26 @@
 // Small D1 helpers shared across API routes.
 
-export async function listIdeas(db, status) {
-  const stmt =
-    status && status !== "all"
-      ? db
-          .prepare("SELECT * FROM ideas WHERE status = ?1 ORDER BY created_at DESC")
-          .bind(status)
-      : db.prepare("SELECT * FROM ideas ORDER BY created_at DESC");
-  const { results } = await stmt.all();
+// There is only one idea bank ("kept") — archived/"Set Aside" was removed.
+export async function listIdeas(db) {
+  const { results } = await db.prepare("SELECT * FROM ideas ORDER BY created_at DESC").all();
   return results || [];
 }
 
-export async function recentIdeasByStatus(db, status, limit = 12) {
+export async function recentIdeas(db, limit = 12) {
   const { results } = await db
-    .prepare("SELECT * FROM ideas WHERE status = ?1 ORDER BY created_at DESC LIMIT ?2")
-    .bind(status, limit)
+    .prepare("SELECT * FROM ideas ORDER BY created_at DESC LIMIT ?1")
+    .bind(limit)
     .all();
   return results || [];
 }
 
-export async function insertIdea(db, { id, premise, thread, tension, status, created_at }) {
+export async function insertIdea(db, { id, premise, thread, tension, created_at }) {
   await db
     .prepare(
-      "INSERT INTO ideas (id, premise, thread, tension, status, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)"
+      "INSERT INTO ideas (id, premise, thread, tension, created_at) VALUES (?1, ?2, ?3, ?4, ?5)"
     )
-    .bind(id, premise, thread || null, tension || null, status, created_at)
+    .bind(id, premise, thread || null, tension || null, created_at)
     .run();
-}
-
-export async function updateIdeaStatus(db, id, status) {
-  const res = await db
-    .prepare("UPDATE ideas SET status = ?1 WHERE id = ?2")
-    .bind(status, id)
-    .run();
-  return res.meta && res.meta.changes > 0;
 }
 
 export async function deleteIdea(db, id) {
@@ -94,4 +81,50 @@ export async function upsertKomorebiTopic(db, sunday_date, topic) {
     )
     .bind(sunday_date, topic)
     .run();
+}
+
+// Calendar card production status, keyed by (entry_date, pillar). Returns
+// a flat map of "date|pillar" -> status; an absent key means not_started.
+export async function getCardStatuses(db, start, end) {
+  let stmt;
+  if (start && end) {
+    stmt = db
+      .prepare(
+        "SELECT entry_date, pillar, status FROM card_status WHERE entry_date >= ?1 AND entry_date <= ?2"
+      )
+      .bind(start, end);
+  } else {
+    stmt = db.prepare("SELECT entry_date, pillar, status FROM card_status");
+  }
+  const { results } = await stmt.all();
+  const out = {};
+  for (const row of results || []) out[`${row.entry_date}|${row.pillar}`] = row.status;
+  return out;
+}
+
+export async function upsertCardStatus(db, entry_date, pillar, status, updated_at) {
+  await db
+    .prepare(
+      `INSERT INTO card_status (entry_date, pillar, status, updated_at) VALUES (?1, ?2, ?3, ?4)
+       ON CONFLICT(entry_date, pillar) DO UPDATE SET status = excluded.status, updated_at = excluded.updated_at`
+    )
+    .bind(entry_date, pillar, status, updated_at)
+    .run();
+}
+
+// Every Komorebi Sunday whose card status is "posted", joined against its
+// saved topic text. Reference list only — nothing writes to this, it's
+// derived entirely from card_status + komorebi_topics.
+export async function getPostedKomorebiTopics(db) {
+  const { results } = await db
+    .prepare(
+      `SELECT cs.entry_date AS date, kt.topic AS topic
+       FROM card_status cs
+       JOIN komorebi_topics kt ON kt.sunday_date = cs.entry_date
+       WHERE cs.pillar = 'komorebi' AND cs.status = 'posted'
+         AND kt.topic IS NOT NULL AND kt.topic != ''
+       ORDER BY cs.entry_date DESC`
+    )
+    .all();
+  return results || [];
 }

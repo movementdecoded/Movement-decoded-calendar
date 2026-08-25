@@ -53,38 +53,26 @@ export function buildProfileContext(profileRows) {
   );
 }
 
-// kept / archived: arrays of idea rows ({premise, ...}), most recent first.
-export function buildVoiceContext(kept, archived) {
+// kept: array of idea rows ({premise, ...}), most recent first. (There's
+// only one bank now — archived/"Set Aside" was removed, so this is a
+// single-signal example set rather than a kept-vs-archived contrast.)
+export function buildVoiceContext(kept) {
   const keptList = (kept || []).slice(0, 12);
-  const archivedList = (archived || []).slice(0, 12);
 
-  if (keptList.length === 0 && archivedList.length === 0) {
+  if (keptList.length === 0) {
     return "No examples yet, use your best judgement from the manifesto and voice rules alone.";
   }
 
-  const parts = [
-    "IMPORTANT: the examples below are for TONE AND VOICE ONLY, ignore their subject matter entirely, do not treat what they happen to be about as a signal to repeat that topic or lineage. Look only at how directly they speak, how they hold restraint, how honest and unhedged the register is, whether they avoid any trace of selling or superiority.",
-  ];
-
-  if (keptList.length > 0) {
-    parts.push(
-      "Voice examples that landed right:\n" + keptList.map((i) => `- ${i.premise}`).join("\n")
-    );
-  }
-
-  if (archivedList.length > 0) {
-    parts.push(
-      "Voice examples that felt off in tone, not necessarily in subject:\n" +
-        archivedList.map((i) => `- ${i.premise}`).join("\n")
-    );
-  }
-
-  return parts.join("\n\n");
+  return (
+    "IMPORTANT: the examples below are for TONE AND VOICE ONLY, ignore their subject matter entirely, do not treat what they happen to be about as a signal to repeat that topic or lineage. Look only at how directly they speak, how they hold restraint, how honest and unhedged the register is, whether they avoid any trace of selling or superiority.\n\n" +
+    "Voice examples that landed right:\n" +
+    keptList.map((i) => `- ${i.premise}`).join("\n")
+  );
 }
 
-export function buildGenerateSystemPrompt(profileRows, kept, archived) {
+export function buildGenerateSystemPrompt(profileRows, kept) {
   const profileContext = buildProfileContext(profileRows);
-  const voiceContext = buildVoiceContext(kept, archived);
+  const voiceContext = buildVoiceContext(kept);
 
   return `You are helping generate Komorebi Session premises for a movement coach's Instagram brand called Movement Decoded.
 Manifesto: ${MANIFESTO}
@@ -108,8 +96,8 @@ tension: one sentence naming the real paradox or unresolved question the idea si
 
 // Topic Builder: turns a Komorebi Session topic (an idea's premise, or a
 // calendar Sunday's topic text) into a full five-part script.
-export function buildScriptSystemPrompt(kept, archived) {
-  const voiceContext = buildVoiceContext(kept, archived);
+export function buildScriptSystemPrompt(kept) {
+  const voiceContext = buildVoiceContext(kept);
 
   return `You are building a script for a single Komorebi Session for Movement Decoded, a movement coach's Instagram brand, from a topic.
 Manifesto: ${MANIFESTO}
@@ -125,8 +113,8 @@ ${SCRIPT_RESPONSE_FORMAT}`;
 // Brain Dump to Script: finds the script already hiding inside a raw,
 // unstructured stream-of-consciousness dump, preserving the person's own
 // language rather than rewriting it.
-export function buildBrainDumpSystemPrompt(kept, archived) {
-  const voiceContext = buildVoiceContext(kept, archived);
+export function buildBrainDumpSystemPrompt(kept) {
+  const voiceContext = buildVoiceContext(kept);
 
   return `You are turning a raw, messy, stream of consciousness brain dump into a script for a Komorebi Session for Movement Decoded, a movement coach's Instagram brand.
 Manifesto: ${MANIFESTO}

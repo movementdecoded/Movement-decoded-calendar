@@ -35,7 +35,7 @@
       <h1>Komorebi Idea Lab</h1>
       <button class="btn btn-primary" id="generate-btn">Generate ideas</button>
     </div>
-    <p class="panel-hint">Five premises at a time. Keep what lands, set aside what might still spark, build out anything worth scripting.</p>
+    <p class="panel-hint">Five premises at a time. Keep what lands, build a script from anything worth scripting.</p>
     <div id="generate-status" class="status-line" hidden></div>
     <div class="idea-grid" id="idea-grid"></div>
   </section>
@@ -51,19 +51,11 @@
     <div id="brain-dump-status" class="status-line" hidden></div>
   </section>
 
-  <!-- 3. Kept / Set Aside banks -->
+  <!-- 3. Kept ideas -->
   <section class="panel">
     <details class="collapsible" open>
       <summary><h2>Kept ideas</h2><span class="count-badge" id="kept-count">0</span></summary>
       <div class="idea-list" id="kept-list"></div>
-    </details>
-  </section>
-
-  <section class="panel">
-    <details class="collapsible">
-      <summary><h2>Set aside</h2><span class="count-badge" id="archived-count">0</span></summary>
-      <p class="panel-hint">Not rejected, just resting. Fully reversible.</p>
-      <div class="idea-list" id="archived-list"></div>
     </details>
   </section>
 
@@ -95,6 +87,13 @@
         </label>
       </div>
     </details>
+  </section>
+
+  <!-- 5. Komorebi topics already posted -->
+  <section class="panel">
+    <h1>Komorebi topics already posted</h1>
+    <p class="panel-hint">Reference only, so past topics don't get accidentally repeated.</p>
+    <div class="posted-topics-list" id="posted-topics-list"></div>
   </section>
 </div>
 
