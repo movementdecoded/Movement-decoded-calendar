@@ -2,14 +2,19 @@ name = "movement-decoded-calendar"
 compatibility_date = "2024-09-23"
 pages_build_output_dir = "public"
 
-# D1 database binding — create the database first:
-#   wrangler d1 create movement_decoded_db
-# then paste the returned database_id below.
-[[d1_databases]]
-binding = "DB"
-database_name = "movement_decoded_db"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
-
+# D1 binding is configured via the Cloudflare dashboard instead of here
+# (Pages project -> Settings -> Functions -> D1 database bindings:
+# variable name "DB", database "movement_decoded_db"). A [[d1_databases]]
+# block used to live in this file with a literal placeholder database_id
+# that was never replaced with the real one — since pages_build_output_dir
+# is set here, Cloudflare's Git-integration build pipeline treats this
+# file as authoritative and tried to apply that invalid binding during the
+# deploy step on every single build, which is what was actually causing
+# "deployment failed due to an internal error" (build passed every time;
+# only the binding-application step at deploy failed). Confirm the
+# dashboard binding is set before relying on this — it's now the only
+# place D1 gets bound for Pages deploys.
+#
 # ANTHROPIC_API_KEY is a secret, not set here.
 # Set it with:
 #   wrangler pages secret put ANTHROPIC_API_KEY

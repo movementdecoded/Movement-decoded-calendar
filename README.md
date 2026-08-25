@@ -86,8 +86,10 @@ wrangler login
 wrangler d1 create movement_decoded_db
 ```
 
-Copy the `database_id` from the output into `wrangler.toml`, replacing
-`REPLACE_WITH_D1_DATABASE_ID`.
+Note the `database_id` from the output — you'll need it for step 6. (It
+doesn't go in `wrangler.toml`; the binding is configured in the Cloudflare
+dashboard instead, see step 6, so a build never depends on this file
+carrying a real database ID.)
 
 ### 3. Apply the schema
 
@@ -121,11 +123,12 @@ wrangler pages secret put ANTHROPIC_MODEL
 
 ### 6. Bind D1 to the Pages project
 
-If deploying via `wrangler pages deploy` with `wrangler.toml` present, the
-`[[d1_databases]]` block in `wrangler.toml` is picked up automatically. If
-you're using the Cloudflare dashboard's Git integration instead, add the D1
-binding manually under **Pages project → Settings → Functions → D1 database
-bindings**: variable name `DB`, database `movement_decoded_db`.
+Add the D1 binding under **Pages project → Settings → Functions → D1
+database bindings**: variable name `DB`, database `movement_decoded_db`.
+This is the only place D1 gets bound — `wrangler.toml` intentionally
+doesn't declare a `[[d1_databases]]` block (see the comment in that file
+for why: a leftover placeholder `database_id` there was silently failing
+every Git-integration deploy at the binding-application step).
 
 ### 7. Deploy
 
