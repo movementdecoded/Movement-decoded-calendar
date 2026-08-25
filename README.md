@@ -1,5 +1,7 @@
 # Movement Decoded — Content Calendar & Idea Lab
 
+<!-- Cloudflare Pages production branch repointed to claude/movement-decoded-webapp-3ju6xv; trivial commit to trigger the first deploy on the new setting. -->
+
 A personal content-ops tool for Instagram, covering four pillars (Collage,
 Physical Haikus, Komorebi Sessions, Carousels) with a fixed posting calendar
 and an AI-assisted idea generator for Komorebi Sessions. Runs on Cloudflare
