@@ -144,9 +144,16 @@ dashboard once the first deploy is live.
 ## Local development
 
 ```
-npm install
-npm run dev
+npx wrangler pages dev public --d1=DB
 ```
+
+There's deliberately no `package.json` in this repo — the Functions are
+plain ES modules with no npm dependencies, and Cloudflare's Git-integration
+build pipeline auto-detects Node projects from `package.json` and expects a
+`package-lock.json` alongside it (`npm ci` fails without one). A repo with
+no `package.json` skips that detection entirely and deploys as a pure
+static site + Functions, no npm/build phase involved. `npx` fetches
+`wrangler` on demand for this one command, no local install needed.
 
 `wrangler pages dev` serves `public/` and runs the Functions locally against
 a local D1 replica. Set `ANTHROPIC_API_KEY` in a `.dev.vars` file (git-ignored)
