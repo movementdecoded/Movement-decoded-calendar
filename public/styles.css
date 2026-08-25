@@ -16,11 +16,14 @@
   --pillar-carousel: #b5744a;
 
   /* Card production status — deliberately a distinct palette from the
-     pillar colors above, since the two signals are independent. */
-  --status-not-started: #c1503f;
-  --status-drafted: #d98a3d;
-  --status-scripted: #d9b25f;
-  --status-posted: #6fae5a;
+     pillar colors above, since the two signals are independent.
+     none = not set (default), red = not started, orange = drafted/
+     filmed, yellow = scripted/scheduled, green = posted. */
+  --status-none: #9a9284;
+  --status-red: #c1503f;
+  --status-orange: #d98a3d;
+  --status-yellow: #d9b25f;
+  --status-green: #6fae5a;
 
   --font-serif: "Iowan Old Style", "Palatino Linotype", Georgia, "Times New Roman", serif;
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
@@ -253,10 +256,46 @@ html, body {
   padding: 0;
 }
 
-.status-toggle.status-not_started { background: var(--status-not-started); }
-.status-toggle.status-drafted { background: var(--status-drafted); }
-.status-toggle.status-scripted { background: var(--status-scripted); }
-.status-toggle.status-posted { background: var(--status-posted); }
+.status-toggle.status-none { background: var(--status-none); }
+.status-toggle.status-red { background: var(--status-red); }
+.status-toggle.status-orange { background: var(--status-orange); }
+.status-toggle.status-yellow { background: var(--status-yellow); }
+.status-toggle.status-green { background: var(--status-green); }
+
+/* Status picker: the same status as the dot above, but as labeled buttons
+   for accessibility (no need to know what a color means). Shown in the
+   expanded sheet. The currently-selected one is highlighted; the rest sit
+   at lower opacity so the active state reads clearly among all five. */
+.status-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.status-picker-btn {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  padding: 5px 9px;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  color: #fff;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.15s ease, border-color 0.15s ease;
+}
+
+.status-picker-btn.is-active {
+  opacity: 1;
+  border-color: var(--ink);
+}
+
+.status-picker-btn.status-none { background: var(--status-none); }
+.status-picker-btn.status-red { background: var(--status-red); }
+.status-picker-btn.status-orange { background: var(--status-orange); }
+.status-picker-btn.status-yellow { background: var(--status-yellow); }
+.status-picker-btn.status-green { background: var(--status-green); }
 
 .day-details {
   display: flex;
@@ -553,6 +592,12 @@ html, body {
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--pillar-komorebi);
+}
+
+.modal-keep {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px dashed rgba(43, 38, 32, 0.2);
 }
 
 .script-beats h3 {

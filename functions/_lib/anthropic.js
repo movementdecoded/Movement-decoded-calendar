@@ -41,12 +41,32 @@ export async function callAnthropicJSON(env, { system, userMessage, maxTokens = 
     }),
   });
 
+  // Read as text first rather than calling res.json() directly, so a
+  // malformed or non-JSON response (a gateway error page, a truncated
+  // body) surfaces a snippet of what actually came back instead of a
+  // generic "Unexpected token" error with no context to debug from.
+  const rawBody = await res.text();
+
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`Anthropic API error ${res.status}: ${text.slice(0, 500)}`);
+    throw new Error(`Anthropic API error ${res.status}: ${rawBody.slice(0, 500)}`);
   }
 
-  const data = await res.json();
+  let data;
+  try {
+    data = JSON.parse(rawBody);
+  } catch (_) {
+    throw new Error(`Anthropic API returned non-JSON response: ${rawBody.slice(0, 500)}`);
+  }
+
+  // A response cut off mid-generation is a common, previously confusing
+  // failure mode (it looks like an empty or malformed result downstream)
+  // — call it out explicitly rather than letting it fail opaquely later.
+  if (data.stop_reason === "max_tokens") {
+    throw new Error(
+      `Response got cut off (stop_reason: max_tokens, max_tokens was ${maxTokens}). Try again or raise max_tokens.`
+    );
+  }
+
   const raw = (data.content || [])
     .filter((block) => block.type === "text")
     .map((block) => block.text)

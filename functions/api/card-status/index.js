@@ -3,9 +3,10 @@ import { jsonResponse } from "../../_lib/anthropic.js";
 
 // Keep in sync with public/app.js's STATUS_CYCLE — separate copies since
 // the Function and the static frontend are different runtimes with no
-// shared module between them.
+// shared module between them. "none" is the default/not-set state,
+// distinct from "red" (not started) — moving off grey is deliberate.
 const VALID_PILLARS = new Set(["collage", "haiku", "komorebi", "carousel"]);
-const VALID_STATUSES = new Set(["not_started", "drafted", "scripted", "posted"]);
+const VALID_STATUSES = new Set(["none", "red", "orange", "yellow", "green"]);
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function onRequestGet({ request, env }) {

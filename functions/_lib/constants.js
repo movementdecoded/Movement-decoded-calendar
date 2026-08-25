@@ -46,9 +46,9 @@ export const VARIETY_RULE = `Variety is a requirement, not a suggestion. Do not 
 // Dump to Script alike) must follow, in this order, always.
 export const FIVE_PART_ARC = `When building a script from a Komorebi Sessions topic, always follow this five part narrative arc, in this order:
 Disruption: open with a direct counterintuitive claim that contradicts assumption. Not a question, not a manipulative hook. Something that makes the listener tilt their head.
-Recognition: bring the listener into a feeling they already know before explaining anything. Use "us" register where possible. No teaching yet. Just "you know this feeling."
+Recognition: bring the listener into a feeling they already know before explaining anything. Use "us" register where possible. No teaching yet, just "you know this feeling."
 Reframe: the central move. Take something they thought they understood and show them it's actually something else. This is always the strongest moment in the script.
-Evidence: science, personal experience, a cultural reference, a historical fact. Something that makes the reframe feel earned. If making a scientific claim, tag confidence level as Certain, Likely, or Guessing before including it.
+Evidence: science, personal experience, a cultural reference, a historical fact, something that makes the reframe feel earned. If making a scientific claim, tag confidence level as Certain, Likely, or Guessing before including it.
 Invitation and/or Payoff: either open a door and leave the viewer to think, or land with a final statement that has real weight. The topic tells you which one it needs. Sometimes both. Never a diplomatic hedge.
 Scripts should sit between 90 and 180 seconds spoken pace. Tight sentences. Leave room for the viewer to think.`;
 

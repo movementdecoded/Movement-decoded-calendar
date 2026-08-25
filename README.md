@@ -32,19 +32,24 @@ functions/
     db.js                  D1 query helpers
     anthropic.js            Anthropic API client + response JSON parsing
   api/
-    ideas/index.js          GET (list), POST (create) — the one idea bank;
-                           "Set Aside" was removed, delete is the only way
-                           a kept idea leaves the bank
-    ideas/[id].js           DELETE (remove)
+    ideas/index.js          GET (list), POST (create, optionally with a
+                           `script` attached) — the one idea bank; "Set
+                           Aside" was removed, delete is the only way a
+                           kept idea leaves the bank
+    ideas/[id].js           PATCH (attach/replace `script` on an existing
+                           kept idea — the "Keep this script" flow),
+                           DELETE (remove)
     profile/index.js        GET, PUT (per-field upsert)
     komorebi-topics/index.js  GET, PUT (per-Sunday upsert)
     card-status/index.js    GET (by date range), PUT (upsert) — the
                            per-card production status toggle
     posted-komorebi-topics.js  GET — every Komorebi topic whose card
-                           status is "posted", reference-only
+                           status is "green" (posted), reference-only
     generate-ideas.js       POST — 5 new premises from Anthropic
     build-script.js         POST — five-part-arc script from a topic
-                           (an idea's premise, or a calendar Sunday topic)
+                           (an idea's premise); also exports the shared
+                           `validateScript` shape validator used by
+                           brain-dump-script.js and the ideas routes above
     brain-dump-script.js    POST — five-part-arc script found inside a raw,
                            unstructured brain dump, preserving its wording
 schema.sql                D1 schema, fresh-install baseline (ideas,
@@ -166,6 +171,7 @@ push — D1 has no "run migrations on deploy" wiring here. Apply each file in
 
 ```
 wrangler d1 execute movement_decoded_db --remote --file=migrations/0002_remove_archived_status.sql
+wrangler d1 execute movement_decoded_db --remote --file=migrations/0003_five_part_arc_and_keep_script.sql
 ```
 
 No terminal needed either: paste the file's contents into the Cloudflare
@@ -179,11 +185,15 @@ upgrade path to get there.
 
 See `schema.sql`. Four tables: `ideas` (the kept-idea bank — there's only
 one bank; a kept idea that doesn't work out is deleted rather than moved to
-an intermediate "Set Aside" state), `profile` (the five My World fields),
-`komorebi_topics` (one row per Sunday, person-chosen — the tool never
-auto-fills these from the topic bank), and `card_status` (production status
-per calendar card, keyed by the specific date + pillar, not just the
-pillar, since each week's occurrence tracks independently).
+an intermediate "Set Aside" state; `script` is a nullable JSON blob holding
+the full five-part script once one's been kept for that idea), `profile`
+(the five My World fields), `komorebi_topics` (one row per Sunday,
+person-chosen — the tool never auto-fills these from the topic bank), and
+`card_status` (production status per calendar card, keyed by a single
+`card_key` of `"YYYY-MM-DD:pillar"` — the specific date + pillar, not just
+the pillar, since each week's occurrence tracks independently). Absence of
+a `card_status` row means `none` (not set, the default grey state),
+distinct from `red` (not started) — moving off grey is a deliberate action.
 
 ## Prompt design notes
 
@@ -216,50 +226,81 @@ historical reference that earns the reframe) → **Invitation and/or Payoff**
 (open a door, land a final statement with weight, or both — never a
 diplomatic hedge). See `FIVE_PART_ARC` in `constants.js` for the exact
 wording, and `SCRIPT_RESPONSE_FORMAT` in `prompts.js` for the JSON contract.
+`build-script.js`'s prompt also includes `STORYTELLING_CRAFT`;
+`brain-dump-script.js`'s deliberately doesn't (it relies on the arc plus
+the preserve-original-language instruction instead).
 
-Any factual or empirical claim in the script (not just formal science — a
-casual "this is how kids' bodies work" aside counts too) is pulled out into
-a separate `claims` array, each tagged **Certain** / **Likely** / **Guessing**,
+Each script also carries a short `title` (4-8 words) and an evidence-only
+fact-check list: any scientific or factual claim specifically within the
+**evidence** beat (not the whole script) is pulled into a separate
+`confidence_flags` array, each tagged **Certain** / **Likely** / **Guessing**,
 so the fact-check list renders apart from the spoken voiceover text instead
-of interrupting it with inline labels. Ephemeral like everything else the AI
-generates here — nothing is written to D1 unless you copy it out yourself.
+of interrupting it with inline labels.
 
-- **Topic Builder** (`build-script.js`): triggered by the "Build script"
-  button on an idea card (kept or freshly generated) or on a calendar
-  Sunday's topic field. Both send a `topic` string to the same endpoint.
+- **Topic Builder** (`build-script.js`): triggered by "Build it out" on a
+  kept idea (or a freshly-generated one, before it's kept). Sends a `topic`
+  string built from the idea's premise.
 - **Brain Dump to Script** (`brain-dump-script.js`): its own panel under the
   Idea Lab. Paste raw, unstructured thinking; the prompt finds the core
   reframe already hiding in it and builds the five-part arc around it
   without paraphrasing your original wording.
+
+### Keep this script
+
+Every generated script shows a "Keep this script" button. What it does
+depends on where the script came from:
+
+- From a **kept idea's** "Build it out" → `PATCH /api/ideas/:id` attaches
+  the script to that same idea (its row already exists).
+- From a **freshly-generated** idea card's "Build it out", or from **Brain
+  Dump** (which has no originating idea at all) → `POST /api/ideas` creates
+  a new kept idea, with the script's own `title` standing in as the
+  premise for a Brain Dump script.
+
+Once an idea has a `script` attached, its Kept ideas row shows "View
+script" instead of "Build it out" — that opens the saved script straight
+from local data, no request, and with no Keep button (it's already kept).
+A script that's never kept is otherwise ephemeral — shown once, not written
+to D1 until you keep it.
 
 ## Calendar cards: status toggle + tap to expand
 
 Each pillar day (Collage/Haiku/Komorebi, plus Carousel on alternating bonus
 Mondays) shows only its pillar title by default. Two separate interactions:
 
-- **The small circular arrow** (top-right corner) cycles a card's
-  production status independently of the pillar color: not started (red) →
-  drafted/filmed (orange) → scripted/scheduled (yellow) → posted (green) →
-  back to not started. Persisted per exact date + pillar in `card_status`.
-- **Tapping the card body** (anywhere but the status arrow) expands it to
-  show that pillar's description, and for Sunday specifically, the topic
-  editor and "Build script" button. Tapping again collapses it.
+- **The small circular dot** (top-right corner) cycles a card's production
+  status independently of the pillar color: none/not set (grey) → not
+  started (red) → drafted/filmed (orange) → scripted/scheduled (yellow) →
+  posted (green) → back to none. Persisted per exact date + pillar
+  (`card_key`) in `card_status`.
+- **Tapping the card body** (anywhere but the status dot) expands it to
+  show that pillar's fixed description, that week's topic for Sunday
+  specifically, and the same status choice again as five labeled buttons
+  (rather than a color-coded dot) for accessibility. Tapping the card again
+  collapses it. There's no script-building trigger on the calendar itself —
+  that only happens from a kept idea or Brain Dump, see above.
 
-Marking a Komorebi Sunday's status "posted" is what makes its topic show up
-in **Komorebi topics already posted** at the bottom of the page — that
-section is purely derived from `card_status` + `komorebi_topics`, nothing
-new to fill in.
+Marking a Komorebi Sunday's status "posted" (green) is what makes its topic
+show up in **Komorebi topics already posted** at the bottom of the page —
+that section is purely derived from `card_status` + `komorebi_topics`,
+nothing new to fill in.
 
 ## Testing the full loop
 
 1. Open the deployed URL, generate a batch of ideas
-2. Keep one, build a script from it, then remove it
-3. On the calendar, tap a pillar day to expand its description, tap its
-   status arrow a few times to cycle colors, reload and confirm it stuck
-4. Edit a Komorebi Sunday's topic, cycle its status to "posted", and check
-   it shows up under Komorebi topics already posted
-5. Paste something into Brain Dump to Script and check the result
-6. Fill in a My World field and wait for the autosave indicator
-7. Reload the page (or open it on a different device) and confirm the
-   persisted state (ideas, topics, card statuses, profile) came back —
-   scripts themselves are ephemeral by design and won't persist
+2. Keep one, build a script from it, keep the script, confirm the row now
+   shows "View script" and reopens the same script with no network call
+3. Generate another idea, build a script from it before keeping the idea,
+   keep the script, confirm it shows up in Kept ideas with that script
+   attached
+4. On the calendar, tap a pillar day to expand its description, cycle its
+   status dot through all five colors, reload and confirm it stuck; try
+   the labeled status buttons in the expanded sheet too
+5. Edit a Komorebi Sunday's topic, set its status to posted (green), and
+   check it shows up under Komorebi topics already posted
+6. Paste something into Brain Dump to Script, generate, keep it, confirm it
+   appears in Kept ideas titled with the script's own generated title
+7. Fill in a My World field and wait for the autosave indicator
+8. Reload the page (or open it on a different device) and confirm the
+   persisted state (ideas, kept scripts, topics, card statuses, profile)
+   came back — an unkept script is ephemeral by design and won't persist

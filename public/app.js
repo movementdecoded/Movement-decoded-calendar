@@ -94,14 +94,17 @@
   }
 
   // Production status, independent of the pillar's own color coding.
-  // Cycling order: not started -> drafted/filmed -> scripted/scheduled ->
-  // posted -> back to not started.
-  const STATUS_CYCLE = ["not_started", "drafted", "scripted", "posted"];
+  // Cycling order: none (not set) -> red (not started) -> orange
+  // (drafted/filmed) -> yellow (scripted/scheduled) -> green (posted) ->
+  // back to none. "none" is a distinct default state from "red" — moving
+  // off grey is itself a deliberate action.
+  const STATUS_CYCLE = ["none", "red", "orange", "yellow", "green"];
   const STATUS_LABELS = {
-    not_started: "Hasn't started",
-    drafted: "Drafted / filmed",
-    scripted: "Scripted / scheduled",
-    posted: "Posted",
+    none: "Not set",
+    red: "Not started",
+    orange: "Drafted / filmed",
+    yellow: "Scripted / scheduled",
+    green: "Posted",
   };
 
   function nextStatus(current) {
@@ -212,43 +215,54 @@
     tag.textContent = info.label;
     card.appendChild(tag);
 
-    // Status toggle — a separate signal from the pillar color above.
-    const statusKey = `${iso}|${pillar}`;
-    let currentStatus = statuses[statusKey] || "not_started";
+    // Status toggle (a small dot) — a separate signal from the pillar
+    // color above. The expanded sheet below repeats this as labeled
+    // buttons for accessibility; both stay in sync via setCardStatus.
+    const statusKey = `${iso}:${pillar}`;
+    let currentStatus = statuses[statusKey] || "none";
+    const pickerButtons = {};
 
     const statusBtn = document.createElement("button");
     statusBtn.type = "button";
     statusBtn.setAttribute("aria-label", "Cycle production status");
+    statusBtn.textContent = "›";
 
-    const applyStatus = (status) => {
+    function setCardStatus(status) {
       currentStatus = status;
       statusBtn.className = `status-toggle status-${status}`;
       statusBtn.title = `${STATUS_LABELS[status]} — tap to advance`;
-    };
-    applyStatus(currentStatus);
-    statusBtn.textContent = "›";
+      for (const value of STATUS_CYCLE) {
+        const btn = pickerButtons[value];
+        if (!btn) continue;
+        btn.classList.toggle("is-active", value === status);
+        btn.setAttribute("aria-pressed", String(value === status));
+      }
+    }
 
-    statusBtn.addEventListener("click", async (e) => {
-      e.stopPropagation();
+    async function commitStatus(next) {
       const previous = currentStatus;
-      const next = nextStatus(currentStatus);
-      applyStatus(next);
+      setCardStatus(next);
       try {
         await api.send("PUT", "/api/card-status", { entry_date: iso, pillar, status: next });
         if (pillar === "komorebi") loadPostedTopics();
       } catch (_) {
-        applyStatus(previous);
+        setCardStatus(previous);
       }
+    }
+
+    statusBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      commitStatus(nextStatus(currentStatus));
     });
     card.appendChild(statusBtn);
 
     // Tap-to-expand content: the pillar's description, plus (Sunday only)
-    // the topic editor and Build script button.
+    // that week's topic, plus the status picker as labeled buttons.
     const details = document.createElement("div");
     details.className = "day-details";
     details.hidden = true;
     // Interacting with anything inside the expanded panel (typing in the
-    // topic box, clicking Build script) shouldn't also collapse the card.
+    // topic box, picking a status) shouldn't also collapse the card.
     details.addEventListener("click", (e) => e.stopPropagation());
 
     const desc = document.createElement("p");
@@ -266,19 +280,9 @@
       const savedNote = document.createElement("div");
       savedNote.className = "topic-saved";
 
-      const buildScriptBtn = document.createElement("button");
-      buildScriptBtn.className = "btn btn-small";
-      buildScriptBtn.textContent = "Build script";
-      buildScriptBtn.disabled = !topicArea.value.trim();
-      buildScriptBtn.addEventListener("click", () => {
-        const topic = topicArea.value.trim();
-        if (topic) buildScript(topic);
-      });
-
       let saveTimer = null;
       topicArea.addEventListener("input", () => {
         savedNote.textContent = "";
-        buildScriptBtn.disabled = !topicArea.value.trim();
         clearTimeout(saveTimer);
         saveTimer = setTimeout(async () => {
           try {
@@ -292,9 +296,27 @@
         }, 600);
       });
 
-      details.append(topicArea, buildScriptBtn, savedNote);
+      details.append(topicArea, savedNote);
     }
 
+    const picker = document.createElement("div");
+    picker.className = "status-picker";
+    STATUS_CYCLE.forEach((value) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = `status-picker-btn status-${value}`;
+      btn.textContent = STATUS_LABELS[value];
+      btn.setAttribute("aria-pressed", "false");
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (value !== currentStatus) commitStatus(value);
+      });
+      pickerButtons[value] = btn;
+      picker.appendChild(btn);
+    });
+    details.appendChild(picker);
+
+    setCardStatus(currentStatus);
     card.appendChild(details);
 
     card.addEventListener("click", () => {
@@ -403,8 +425,19 @@
 
     const buildBtn = document.createElement("button");
     buildBtn.className = "btn btn-small";
-    buildBtn.textContent = "Build script";
-    buildBtn.addEventListener("click", () => buildScript(idea.premise));
+    buildBtn.textContent = "Build it out";
+    buildBtn.addEventListener("click", () => {
+      buildScript(idea.premise, async (script) => {
+        await api.send("POST", "/api/ideas", {
+          premise: idea.premise,
+          thread: idea.thread,
+          tension: idea.tension,
+          script,
+        });
+        card.remove();
+        await loadIdeas();
+      });
+    });
 
     actions.append(keepBtn, buildBtn);
     card.append(thread, premise, tension, actions);
@@ -451,8 +484,23 @@
 
     const buildBtn = document.createElement("button");
     buildBtn.className = "btn btn-small";
-    buildBtn.textContent = "Build script";
-    buildBtn.addEventListener("click", () => buildScript(idea.premise));
+
+    if (idea.script) {
+      // Already has a built script attached — open it straight from local
+      // data, no request, no Keep button (it's already kept).
+      buildBtn.textContent = "View script";
+      buildBtn.addEventListener("click", () => {
+        openScriptModal(idea.script.title || idea.premise, () => Promise.resolve(idea.script));
+      });
+    } else {
+      buildBtn.textContent = "Build it out";
+      buildBtn.addEventListener("click", () => {
+        buildScript(idea.premise, async (script) => {
+          await api.send("PATCH", `/api/ideas/${idea.id}`, { script });
+          await loadIdeas();
+        });
+      });
+    }
 
     const removeBtn = document.createElement("button");
     removeBtn.className = "btn btn-small btn-danger";
@@ -495,13 +543,15 @@
   const modalTitle = document.getElementById("build-modal-title");
   const modalLoading = document.getElementById("build-modal-loading");
   const modalContent = document.getElementById("build-modal-content");
+  const modalKeepWrap = document.getElementById("build-modal-keep");
+  const modalKeepBtn = document.getElementById("build-modal-keep-btn");
 
   const SCRIPT_BEATS = [
     ["Disruption", "disruption"],
     ["Recognition", "recognition"],
     ["Reframe", "reframe"],
     ["Evidence", "evidence"],
-    ["Invitation & Payoff", "invitation_or_payoff"],
+    ["Invitation & Payoff", "invitation_payoff"],
   ];
 
   function renderScript(script) {
@@ -509,15 +559,15 @@
       ([label, key]) => `<h3>${label}</h3><p>${escapeHtml(script[key])}</p>`
     ).join("");
 
-    if (script.claims && script.claims.length > 0) {
+    if (script.confidence_flags && script.confidence_flags.length > 0) {
       html +=
         `<div class="claims-block"><h3>Claims to fact-check</h3>` +
-        script.claims
+        script.confidence_flags
           .map(
-            (c) => `
+            (f) => `
         <div class="claim-row">
-          <span class="claim-badge ${c.confidence.toLowerCase()}">${escapeHtml(c.confidence)}</span>
-          <span class="claim-quote">${escapeHtml(c.quote)}</span>
+          <span class="claim-badge ${f.level.toLowerCase()}">${escapeHtml(f.level)}</span>
+          <span class="claim-quote">${escapeHtml(f.claim)}</span>
         </div>`
           )
           .join("") +
@@ -527,20 +577,45 @@
     return html;
   }
 
-  // title: shown at the top of the modal. request: an async function that
-  // resolves to the validated script object from either /api/build-script
-  // or /api/brain-dump-script.
-  async function openScriptModal(title, request) {
+  // title: shown at the top of the modal while loading, replaced by the
+  // script's own generated title once it resolves. request: an async
+  // function resolving to the validated script, from /api/build-script,
+  // /api/brain-dump-script, or (for an already-kept idea) local data with
+  // no network call at all. keepHandler: optional async function(script)
+  // that persists it — when given, a "Keep this script" button appears
+  // after a successful generation; omit it when just viewing a script
+  // that's already kept, since there's nothing new to save.
+  async function openScriptModal(title, request, keepHandler) {
     backdrop.hidden = false;
     modalTitle.textContent = title;
     modalLoading.hidden = false;
     modalContent.hidden = true;
     modalContent.innerHTML = "";
+    modalKeepWrap.hidden = true;
+    modalKeepBtn.disabled = false;
+    modalKeepBtn.textContent = "Keep this script";
 
     try {
       const script = await request();
+      modalTitle.textContent = script.title || title;
       modalContent.innerHTML = renderScript(script);
       modalContent.hidden = false;
+
+      if (keepHandler) {
+        modalKeepWrap.hidden = false;
+        modalKeepBtn.onclick = async () => {
+          modalKeepBtn.disabled = true;
+          modalKeepBtn.textContent = "Keeping…";
+          try {
+            await keepHandler(script);
+            modalKeepBtn.textContent = "Kept";
+          } catch (err) {
+            modalKeepBtn.disabled = false;
+            modalKeepBtn.textContent = "Keep this script";
+            setStatus(err.message, true);
+          }
+        };
+      }
     } catch (err) {
       modalContent.innerHTML = `<p class="empty-note">${escapeHtml(err.message)}</p>`;
       modalContent.hidden = false;
@@ -549,10 +624,12 @@
     }
   }
 
-  // Topic Builder: idea premises and calendar Sunday topics both funnel
-  // through here into the same five-part-arc backend.
-  function buildScript(topic) {
-    openScriptModal(topic, () => api.send("POST", "/api/build-script", { topic }));
+  // Topic Builder: an idea's premise funnels through here into the
+  // five-part-arc backend. keepHandler is forwarded to openScriptModal —
+  // see there for what triggers it (a kept idea's "Build it out" vs a
+  // freshly-generated one).
+  function buildScript(topic, keepHandler) {
+    openScriptModal(topic, () => api.send("POST", "/api/build-script", { topic }), keepHandler);
   }
 
   function escapeHtml(str) {
@@ -598,7 +675,16 @@
     setBrainDumpStatus("Finding the script…");
 
     const title = text.length > 80 ? text.slice(0, 80).trim() + "…" : text;
-    await openScriptModal(title, () => api.send("POST", "/api/brain-dump-script", { text }));
+    await openScriptModal(
+      title,
+      () => api.send("POST", "/api/brain-dump-script", { text }),
+      async (script) => {
+        // Brain Dump has no originating idea/premise — the script's own
+        // title stands in as the kept idea's headline.
+        await api.send("POST", "/api/ideas", { premise: script.title, thread: "", tension: "", script });
+        await loadIdeas();
+      }
+    );
 
     setBrainDumpStatus("");
     brainDumpBtn.disabled = false;

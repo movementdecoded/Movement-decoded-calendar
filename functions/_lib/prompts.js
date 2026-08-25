@@ -9,20 +9,22 @@ import {
   TOPIC_BANK,
 } from "./constants.js";
 
-// Shared JSON contract for both script builders below: five narrative
-// beats as clean, speakable prose, plus every scientific/factual claim
-// made anywhere in the script pulled out separately with a confidence
-// tag, so the UI can show a distinct fact-check list instead of breaking
-// up the read-aloud text with inline tags.
-const SCRIPT_RESPONSE_FORMAT = `Respond ONLY with valid JSON, no markdown fences, and send it as exactly one single JSON object containing all six keys together, never split across more than one code block or JSON object. Format:
-{"disruption":"...", "recognition":"...", "reframe":"...", "evidence":"...", "invitation_or_payoff":"...", "claims":[{"quote":"...", "confidence":"Certain|Likely|Guessing"}]}
+// Shared JSON contract for both script builders below: a short title plus
+// five narrative beats as clean, speakable prose, plus any scientific or
+// factual claim specifically within the evidence beat pulled out
+// separately with a confidence tag, so the UI can show a distinct
+// fact-check list instead of breaking up the read-aloud text with inline
+// tags.
+const SCRIPT_RESPONSE_FORMAT = `Respond ONLY with valid JSON, no markdown fences, and send it as exactly one single JSON object containing all seven keys together, never split across more than one code block or JSON object. Format:
+{"title":"...", "disruption":"...", "recognition":"...", "reframe":"...", "evidence":"...", "invitation_payoff":"...", "confidence_flags":[{"claim":"...", "level":"Certain|Likely|Guessing"}]}
+title: a short evocative title, 4 to 8 words.
 disruption: a direct counterintuitive claim that contradicts assumption, not a question, not a manipulative hook, something that makes the listener tilt their head.
 recognition: bring the listener into a feeling they already know before explaining anything, "us" register where possible, no teaching yet.
 reframe: the central move, take something they thought they understood and show it's actually something else, this is always the strongest moment in the script.
 evidence: science, personal experience, a cultural reference, or a historical fact that makes the reframe feel earned.
-invitation_or_payoff: either open a door and leave the viewer to think, or land with a final statement that has real weight, sometimes both, never a diplomatic hedge.
-claims: every factual or empirical assertion made anywhere in the script that a viewer could fact check, quoted exactly as it appears in the script text. This includes not just formal scientific claims but any "this is how bodies/people/kids work" statement presented as fact, even a casual-sounding one. Each tagged with a confidence level: Certain if backed by hard evidence, Likely if a strong inference, Guessing if filling gaps. This key must always be present, use an empty array only if the script truly makes no checkable claims at all.
-Critical: disruption, recognition, reframe, evidence, and invitation_or_payoff are spoken voiceover, read exactly as written, out loud, over slow footage. Never write the words "Certain", "Likely", or "Guessing" (or any confidence label) inside them, and never let a claim's confidence tag interrupt the sentence it belongs to. All confidence tagging happens only inside the claims array, tagging the same words as they appear in the spoken text, invisibly to the viewer until the fact-check list is shown separately.`;
+invitation_payoff: either open a door and leave the viewer to think, or land with a final statement that has real weight, sometimes both, never a diplomatic hedge.
+confidence_flags: only populated when the evidence beat makes a scientific or factual claim, quoted exactly as it appears in the evidence text, each tagged with a confidence level: Certain if backed by hard evidence, Likely if a strong inference, Guessing if filling gaps. This key must always be present, use an empty array if evidence makes no scientific or factual claim.
+Critical: disruption, recognition, reframe, evidence, and invitation_payoff are spoken voiceover, read exactly as written, out loud, over slow footage (title is a label, not spoken). Never write the words "Certain", "Likely", or "Guessing" (or any confidence label) inside evidence, and never let a confidence tag interrupt the sentence it belongs to. All confidence tagging happens only inside confidence_flags, tagging the same words as they appear in the spoken evidence text, invisibly to the viewer until the fact-check list is shown separately.`;
 
 const PROFILE_LABELS = {
   disciplines: "Disciplines",
@@ -104,6 +106,7 @@ Manifesto: ${MANIFESTO}
 Format rules: ${FORMAT_RULES}
 Voice rules, follow exactly: ${VOICE_RULES}
 ${ANTI_PATTERNS}
+${STORYTELLING_CRAFT}
 ${FIVE_PART_ARC}
 ${voiceContext}
 The piece is filmed sitting under trees in Lisbon, lo-fi telephone-filtered voiceover, slow contemplative visuals. The five part arc above, not the short-cut framing in the format rules, is the actual shape to follow here, it needs real room to develop across the full 90 to 180 seconds.

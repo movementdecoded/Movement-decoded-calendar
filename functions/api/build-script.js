@@ -29,25 +29,31 @@ export async function onRequestPost({ request, env }) {
   }
 }
 
+// Shared by build-script.js, brain-dump-script.js, and the "Keep this
+// script" persistence path (ideas/index.js POST, ideas/[id].js PATCH) —
+// the latter validates a client-submitted script blob rather than a
+// freshly-generated one, so this stays a plain shape validator with no
+// Anthropic-specific assumptions.
 export function validateScript(result) {
-  const { disruption, recognition, reframe, evidence, invitation_or_payoff, claims } = result || {};
+  const { title, disruption, recognition, reframe, evidence, invitation_payoff, confidence_flags } =
+    result || {};
 
-  if (!disruption || !recognition || !reframe || !evidence || !invitation_or_payoff) {
-    throw new Error("Model response did not match the expected five-part script shape.");
+  if (!title || !disruption || !recognition || !reframe || !evidence || !invitation_payoff) {
+    throw new Error("Script did not match the expected five-part shape.");
   }
 
-  // The five narrative beats are the core deliverable and must be right.
-  // `claims` is a best-effort fact-check aid on top of that — the model
-  // sometimes omits the key entirely instead of sending an empty array
-  // when it finds nothing to flag, so treat anything other than a
-  // well-formed array as "no claims flagged" rather than failing the
-  // whole script over it. A malformed *entry* inside an actual array is
-  // still dropped individually rather than trusted as-is.
-  const safeClaims = Array.isArray(claims)
-    ? claims.filter(
-        (claim) => claim && typeof claim.quote === "string" && VALID_CONFIDENCE.has(claim.confidence)
+  // The title + five narrative beats are the core deliverable and must be
+  // right. `confidence_flags` is a best-effort fact-check aid on top of
+  // that — the model sometimes omits the key entirely instead of sending
+  // an empty array when it finds nothing to flag, so treat anything other
+  // than a well-formed array as "no claims flagged" rather than failing
+  // the whole script over it. A malformed *entry* inside an actual array
+  // is still dropped individually rather than trusted as-is.
+  const safeFlags = Array.isArray(confidence_flags)
+    ? confidence_flags.filter(
+        (flag) => flag && typeof flag.claim === "string" && VALID_CONFIDENCE.has(flag.level)
       )
     : [];
 
-  return { disruption, recognition, reframe, evidence, invitation_or_payoff, claims: safeClaims };
+  return { title, disruption, recognition, reframe, evidence, invitation_payoff, confidence_flags: safeFlags };
 }

@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS ideas (
   premise TEXT NOT NULL,
   thread TEXT,
   tension TEXT,
+  script TEXT,  -- nullable JSON blob: the five-part script once "kept"
   created_at TEXT NOT NULL
 );
 
@@ -30,17 +31,14 @@ CREATE TABLE IF NOT EXISTS komorebi_topics (
 );
 
 -- Production status per calendar card, keyed by the specific date + pillar
--- (not just the pillar) since each week's occurrence tracks independently.
--- Absence of a row means "not_started" (the default/red state) — rows are
--- only written once a card's status is actually advanced.
+-- (not just the pillar, since each week's occurrence tracks independently)
+-- combined into one key: "YYYY-MM-DD:pillar_kind". Absence of a row means
+-- "none" (not set, the default/grey state) — rows are only written once a
+-- card's status is actually touched. "none" is a distinct state from "red"
+-- (not started) — moving off grey is itself a deliberate action.
 CREATE TABLE IF NOT EXISTS card_status (
-  entry_date TEXT NOT NULL,  -- ISO date (YYYY-MM-DD)
-  pillar TEXT NOT NULL,      -- 'collage' | 'haiku' | 'komorebi' | 'carousel'
-  status TEXT NOT NULL DEFAULT 'not_started'
-    CHECK(status IN ('not_started', 'drafted', 'scripted', 'posted')),
-  updated_at TEXT NOT NULL,
-  PRIMARY KEY (entry_date, pillar)
+  card_key TEXT PRIMARY KEY,
+  status TEXT NOT NULL DEFAULT 'none'
+    CHECK(status IN ('none', 'red', 'orange', 'yellow', 'green')),
+  updated_at TEXT NOT NULL
 );
-
-CREATE INDEX IF NOT EXISTS idx_card_status_pillar_status
-  ON card_status (pillar, status);
