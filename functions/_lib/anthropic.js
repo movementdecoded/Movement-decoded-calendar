@@ -61,21 +61,72 @@ export async function callAnthropicJSON(env, { system, userMessage, maxTokens = 
   return parseModelJSON(raw);
 }
 
-// Defensive parsing: the prompt instructs no markdown fences, but strip
-// them if the model adds them anyway, and locate the outermost JSON object
-// if there's any stray preamble.
+// Defensive parsing: the prompt instructs a single JSON object with no
+// markdown fences, but the model doesn't always comply exactly (a wrapping
+// fence, stray preamble, or occasionally splitting the answer into more
+// than one JSON object). Scan the raw text for every balanced top-level
+// {...} object, parse each independently, and merge them. Fence markers
+// and any prose fall outside all brace regions and are simply skipped, so
+// this handles clean JSON, fenced JSON, and multiple fenced or unfenced
+// objects with the same logic, rather than special-casing each shape.
 function parseModelJSON(raw) {
-  let text = raw.trim();
-  text = text.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+  const objects = extractTopLevelJSONObjects(raw);
 
-  try {
-    return JSON.parse(text);
-  } catch (_) {
-    const start = text.indexOf("{");
-    const end = text.lastIndexOf("}");
-    if (start !== -1 && end !== -1 && end > start) {
-      return JSON.parse(text.slice(start, end + 1));
+  const parsed = [];
+  for (const candidate of objects) {
+    try {
+      parsed.push(JSON.parse(candidate));
+    } catch (_) {
+      // Not actually valid JSON (e.g. a stray "{" in prose) — skip it.
     }
+  }
+
+  if (parsed.length === 0) {
     throw new Error("Could not parse JSON from model response.");
   }
+
+  return Object.assign({}, ...parsed);
+}
+
+// Depth-counts braces while tracking string state (so a brace character
+// inside a quoted string doesn't affect nesting) to find every complete,
+// balanced {...} substring at depth 0.
+function extractTopLevelJSONObjects(text) {
+  const objects = [];
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  let escapeNext = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+
+    if (escapeNext) {
+      escapeNext = false;
+      continue;
+    }
+    if (inString) {
+      if (ch === "\\") escapeNext = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+    if (ch === "{") {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (ch === "}") {
+      if (depth > 0) {
+        depth--;
+        if (depth === 0 && start !== -1) {
+          objects.push(text.slice(start, i + 1));
+          start = -1;
+        }
+      }
+    }
+  }
+
+  return objects;
 }

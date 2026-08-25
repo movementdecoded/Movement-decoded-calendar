@@ -25,9 +25,10 @@ functions/
   _lib/
     constants.js          brand-level prompt constants (manifesto, voice
                            rules, anti-patterns, storytelling craft, the
-                           104-topic bank) — not user-editable via the UI
+                           five-part script arc, the 104-topic bank) — not
+                           user-editable via the UI
     prompts.js             system-prompt assembly (profile context, voice
-                           context, generate + build-out prompts)
+                           context, generate-ideas + script-builder prompts)
     db.js                  D1 query helpers
     anthropic.js            Anthropic API client + response JSON parsing
   api/
@@ -36,7 +37,10 @@ functions/
     profile/index.js        GET, PUT (per-field upsert)
     komorebi-topics/index.js  GET, PUT (per-Sunday upsert)
     generate-ideas.js       POST — 5 new premises from Anthropic
-    build-idea.js           POST — shot-by-shot build-out for one premise
+    build-script.js         POST — five-part-arc script from a topic
+                           (an idea's premise, or a calendar Sunday topic)
+    brain-dump-script.js    POST — five-part-arc script found inside a raw,
+                           unstructured brain dump, preserving its wording
 schema.sql                D1 schema (ideas, profile, komorebi_topics)
 wrangler.toml              Pages project config + D1 binding
 ```
@@ -160,11 +164,42 @@ manifesto, voice rules, anti-patterns, and storytelling-craft framework
 principle, a departure from source frameworks that end on a call to
 decide).
 
+## Script builder: the five-part arc
+
+Every script (`build-script.js` and `brain-dump-script.js` alike) follows a
+fixed narrative shape, always in this order: **Disruption** (a direct
+counterintuitive claim, not a question or a hook) → **Recognition** (bring
+the listener into a feeling they already know, "us" register, no teaching
+yet) → **Reframe** (the strongest move — show them the thing is actually
+something else) → **Evidence** (science, personal experience, a cultural or
+historical reference that earns the reframe) → **Invitation and/or Payoff**
+(open a door, land a final statement with weight, or both — never a
+diplomatic hedge). See `FIVE_PART_ARC` in `constants.js` for the exact
+wording, and `SCRIPT_RESPONSE_FORMAT` in `prompts.js` for the JSON contract.
+
+Any factual or empirical claim in the script (not just formal science — a
+casual "this is how kids' bodies work" aside counts too) is pulled out into
+a separate `claims` array, each tagged **Certain** / **Likely** / **Guessing**,
+so the fact-check list renders apart from the spoken voiceover text instead
+of interrupting it with inline labels. Ephemeral like everything else the AI
+generates here — nothing is written to D1 unless you copy it out yourself.
+
+- **Topic Builder** (`build-script.js`): triggered by the "Build script"
+  button on an idea card (kept, archived, or freshly generated) or on a
+  calendar Sunday's topic field. Both send a `topic` string to the same
+  endpoint.
+- **Brain Dump to Script** (`brain-dump-script.js`): its own panel under the
+  Idea Lab. Paste raw, unstructured thinking; the prompt finds the core
+  reframe already hiding in it and builds the five-part arc around it
+  without paraphrasing your original wording.
+
 ## Testing the full loop
 
 1. Open the deployed URL, generate a batch of ideas
-2. Keep one, set another aside, build out a third
-3. Edit a Komorebi Sunday topic on the calendar
-4. Fill in a My World field and wait for the autosave indicator
-5. Reload the page (or open it on a different device) and confirm all four
-   persisted
+2. Keep one, set another aside, build a script from a third
+3. Edit a Komorebi Sunday topic on the calendar, then build a script from it
+4. Paste something into Brain Dump to Script and check the result
+5. Fill in a My World field and wait for the autosave indicator
+6. Reload the page (or open it on a different device) and confirm the
+   persisted state (ideas, topics, profile) came back — scripts are
+   ephemeral by design and won't persist

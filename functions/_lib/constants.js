@@ -42,6 +42,16 @@ Leave an opening, not a decision: adapt this one carefully. The reference materi
 // after the voice-context block ("examples above" refers to it).
 export const VARIETY_RULE = `Variety is a requirement, not a suggestion. Do not let the 5 ideas in one batch cluster around a single discipline or theme, spread them across genuinely different lineages, drawing from the knowledge profile and topic bank both. Do not let tone examples above narrow the subject matter, tone and topic are separate signals, only tone should carry forward.`;
 
+// The fixed five-part narrative arc every script (Topic Builder and Brain
+// Dump to Script alike) must follow, in this order, always.
+export const FIVE_PART_ARC = `When building a script from a Komorebi Sessions topic, always follow this five part narrative arc, in this order:
+Disruption: open with a direct counterintuitive claim that contradicts assumption. Not a question, not a manipulative hook. Something that makes the listener tilt their head.
+Recognition: bring the listener into a feeling they already know before explaining anything. Use "us" register where possible. No teaching yet. Just "you know this feeling."
+Reframe: the central move. Take something they thought they understood and show them it's actually something else. This is always the strongest moment in the script.
+Evidence: science, personal experience, a cultural reference, a historical fact. Something that makes the reframe feel earned. If making a scientific claim, tag confidence level as Certain, Likely, or Guessing before including it.
+Invitation and/or Payoff: either open a door and leave the viewer to think, or land with a final statement that has real weight. The topic tells you which one it needs. Sometimes both. Never a diplomatic hedge.
+Scripts should sit between 90 and 180 seconds spoken pace. Tight sentences. Leave room for the viewer to think.`;
+
 // 104 reference topics. Existing scope and tone only — never repeated
 // verbatim by the generator, always used to find adjacent, distinct angles.
 export const TOPIC_BANK = [

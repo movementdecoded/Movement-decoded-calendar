@@ -160,9 +160,19 @@
         const savedNote = document.createElement("div");
         savedNote.className = "topic-saved";
 
+        const buildScriptBtn = document.createElement("button");
+        buildScriptBtn.className = "btn btn-small";
+        buildScriptBtn.textContent = "Build script";
+        buildScriptBtn.disabled = !topicArea.value.trim();
+        buildScriptBtn.addEventListener("click", () => {
+          const topic = topicArea.value.trim();
+          if (topic) buildScript(topic);
+        });
+
         let saveTimer = null;
         topicArea.addEventListener("input", () => {
           savedNote.textContent = "";
+          buildScriptBtn.disabled = !topicArea.value.trim();
           clearTimeout(saveTimer);
           saveTimer = setTimeout(async () => {
             try {
@@ -179,6 +189,7 @@
         });
 
         card.appendChild(topicArea);
+        card.appendChild(buildScriptBtn);
         card.appendChild(savedNote);
       }
 
@@ -266,8 +277,8 @@
 
     const buildBtn = document.createElement("button");
     buildBtn.className = "btn btn-small";
-    buildBtn.textContent = "Build it out";
-    buildBtn.addEventListener("click", () => openBuildModal(idea.premise));
+    buildBtn.textContent = "Build script";
+    buildBtn.addEventListener("click", () => buildScript(idea.premise));
 
     actions.append(keepBtn, setAsideBtn, buildBtn);
     card.append(thread, premise, tension, actions);
@@ -316,8 +327,8 @@
 
     const buildBtn = document.createElement("button");
     buildBtn.className = "btn btn-small";
-    buildBtn.textContent = "Build it out";
-    buildBtn.addEventListener("click", () => openBuildModal(idea.premise));
+    buildBtn.textContent = "Build script";
+    buildBtn.addEventListener("click", () => buildScript(idea.premise));
 
     const moveBtn = document.createElement("button");
     moveBtn.className = "btn btn-small";
@@ -387,28 +398,57 @@
     }
   }
 
-  // ---------- Build-out modal ----------
+  // ---------- Script modal (five-part arc) ----------
 
   const backdrop = document.getElementById("build-modal-backdrop");
   const modalTitle = document.getElementById("build-modal-title");
   const modalLoading = document.getElementById("build-modal-loading");
   const modalContent = document.getElementById("build-modal-content");
 
-  async function openBuildModal(premise) {
+  const SCRIPT_BEATS = [
+    ["Disruption", "disruption"],
+    ["Recognition", "recognition"],
+    ["Reframe", "reframe"],
+    ["Evidence", "evidence"],
+    ["Invitation & Payoff", "invitation_or_payoff"],
+  ];
+
+  function renderScript(script) {
+    let html = SCRIPT_BEATS.map(
+      ([label, key]) => `<h3>${label}</h3><p>${escapeHtml(script[key])}</p>`
+    ).join("");
+
+    if (script.claims && script.claims.length > 0) {
+      html +=
+        `<div class="claims-block"><h3>Claims to fact-check</h3>` +
+        script.claims
+          .map(
+            (c) => `
+        <div class="claim-row">
+          <span class="claim-badge ${c.confidence.toLowerCase()}">${escapeHtml(c.confidence)}</span>
+          <span class="claim-quote">${escapeHtml(c.quote)}</span>
+        </div>`
+          )
+          .join("") +
+        `</div>`;
+    }
+
+    return html;
+  }
+
+  // title: shown at the top of the modal. request: an async function that
+  // resolves to the validated script object from either /api/build-script
+  // or /api/brain-dump-script.
+  async function openScriptModal(title, request) {
     backdrop.hidden = false;
-    modalTitle.textContent = premise;
+    modalTitle.textContent = title;
     modalLoading.hidden = false;
     modalContent.hidden = true;
     modalContent.innerHTML = "";
 
     try {
-      const data = await api.send("POST", "/api/build-idea", { premise });
-      modalContent.innerHTML = `
-        <h3>Opening</h3><p>${escapeHtml(data.opening)}</p>
-        <h3>Throughline</h3><p>${escapeHtml(data.throughline)}</p>
-        <h3>Shots</h3><ol>${data.shots.map((s) => `<li>${escapeHtml(s)}</li>`).join("")}</ol>
-        <h3>Closing</h3><p>${escapeHtml(data.closing)}</p>
-      `;
+      const script = await request();
+      modalContent.innerHTML = renderScript(script);
       modalContent.hidden = false;
     } catch (err) {
       modalContent.innerHTML = `<p class="empty-note">${escapeHtml(err.message)}</p>`;
@@ -416,6 +456,12 @@
     } finally {
       modalLoading.hidden = true;
     }
+  }
+
+  // Topic Builder: idea premises and calendar Sunday topics both funnel
+  // through here into the same five-part-arc backend.
+  function buildScript(topic) {
+    openScriptModal(topic, () => api.send("POST", "/api/build-script", { topic }));
   }
 
   function escapeHtml(str) {
@@ -432,6 +478,39 @@
   });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && !backdrop.hidden) backdrop.hidden = true;
+  });
+
+  // ---------- Brain Dump to Script ----------
+
+  const brainDumpInput = document.getElementById("brain-dump-input");
+  const brainDumpBtn = document.getElementById("brain-dump-btn");
+  const brainDumpStatusEl = document.getElementById("brain-dump-status");
+
+  function setBrainDumpStatus(msg, isError) {
+    if (!msg) {
+      brainDumpStatusEl.hidden = true;
+      return;
+    }
+    brainDumpStatusEl.hidden = false;
+    brainDumpStatusEl.textContent = msg;
+    brainDumpStatusEl.className = "status-line" + (isError ? " error" : "");
+  }
+
+  brainDumpBtn.addEventListener("click", async () => {
+    const text = brainDumpInput.value.trim();
+    if (!text) {
+      setBrainDumpStatus("Paste something in first.", true);
+      return;
+    }
+
+    brainDumpBtn.disabled = true;
+    setBrainDumpStatus("Finding the script…");
+
+    const title = text.length > 80 ? text.slice(0, 80).trim() + "…" : text;
+    await openScriptModal(title, () => api.send("POST", "/api/brain-dump-script", { text }));
+
+    setBrainDumpStatus("");
+    brainDumpBtn.disabled = false;
   });
 
   // ---------- My World (profile) ----------

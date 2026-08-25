@@ -40,6 +40,17 @@
     <div class="idea-grid" id="idea-grid"></div>
   </section>
 
+  <!-- 2b. Brain Dump to Script -->
+  <section class="panel" id="brain-dump-section">
+    <div class="panel-head">
+      <h1>Brain Dump to Script</h1>
+      <button class="btn btn-primary" id="brain-dump-btn">Find the script</button>
+    </div>
+    <p class="panel-hint">Paste it however it came out, half-formed, out of order, mid-sentence. This finds the script already hiding in it, in your own words, not a rewrite.</p>
+    <textarea id="brain-dump-input" class="brain-dump-input" rows="6" placeholder="Just start typing whatever's in your head about this…"></textarea>
+    <div id="brain-dump-status" class="status-line" hidden></div>
+  </section>
+
   <!-- 3. Kept / Set Aside banks -->
   <section class="panel">
     <details class="collapsible" open>
@@ -93,8 +104,8 @@
     <button class="modal-close" id="build-modal-close" aria-label="Close">&times;</button>
     <div id="build-modal-body">
       <p class="modal-premise" id="build-modal-title"></p>
-      <div class="modal-loading" id="build-modal-loading">Building it out&hellip;</div>
-      <div class="build-out" id="build-modal-content" hidden></div>
+      <div class="modal-loading" id="build-modal-loading">Building script&hellip;</div>
+      <div class="script-beats" id="build-modal-content" hidden></div>
     </div>
   </div>
 </div>

@@ -5,8 +5,24 @@ import {
   ANTI_PATTERNS,
   STORYTELLING_CRAFT,
   VARIETY_RULE,
+  FIVE_PART_ARC,
   TOPIC_BANK,
 } from "./constants.js";
+
+// Shared JSON contract for both script builders below: five narrative
+// beats as clean, speakable prose, plus every scientific/factual claim
+// made anywhere in the script pulled out separately with a confidence
+// tag, so the UI can show a distinct fact-check list instead of breaking
+// up the read-aloud text with inline tags.
+const SCRIPT_RESPONSE_FORMAT = `Respond ONLY with valid JSON, no markdown fences, and send it as exactly one single JSON object containing all six keys together, never split across more than one code block or JSON object. Format:
+{"disruption":"...", "recognition":"...", "reframe":"...", "evidence":"...", "invitation_or_payoff":"...", "claims":[{"quote":"...", "confidence":"Certain|Likely|Guessing"}]}
+disruption: a direct counterintuitive claim that contradicts assumption, not a question, not a manipulative hook, something that makes the listener tilt their head.
+recognition: bring the listener into a feeling they already know before explaining anything, "us" register where possible, no teaching yet.
+reframe: the central move, take something they thought they understood and show it's actually something else, this is always the strongest moment in the script.
+evidence: science, personal experience, a cultural reference, or a historical fact that makes the reframe feel earned.
+invitation_or_payoff: either open a door and leave the viewer to think, or land with a final statement that has real weight, sometimes both, never a diplomatic hedge.
+claims: every factual or empirical assertion made anywhere in the script that a viewer could fact check, quoted exactly as it appears in the script text. This includes not just formal scientific claims but any "this is how bodies/people/kids work" statement presented as fact, even a casual-sounding one. Each tagged with a confidence level: Certain if backed by hard evidence, Likely if a strong inference, Guessing if filling gaps. This key must always be present, use an empty array only if the script truly makes no checkable claims at all.
+Critical: disruption, recognition, reframe, evidence, and invitation_or_payoff are spoken voiceover, read exactly as written, out loud, over slow footage. Never write the words "Certain", "Likely", or "Guessing" (or any confidence label) inside them, and never let a claim's confidence tag interrupt the sentence it belongs to. All confidence tagging happens only inside the claims array, tagging the same words as they appear in the spoken text, invisibly to the viewer until the fact-check list is shown separately.`;
 
 const PROFILE_LABELS = {
   disciplines: "Disciplines",
@@ -90,21 +106,37 @@ thread: a 3-5 word note on what lineage or theme it draws from.
 tension: one sentence naming the real paradox or unresolved question the idea sits inside, this is what makes it depth rather than a hook. It should not resolve anything.`;
 }
 
-export function buildBuildOutSystemPrompt(kept, archived) {
+// Topic Builder: turns a Komorebi Session topic (an idea's premise, or a
+// calendar Sunday's topic text) into a full five-part script.
+export function buildScriptSystemPrompt(kept, archived) {
   const voiceContext = buildVoiceContext(kept, archived);
 
-  return `You are helping build out a single Komorebi Session premise for Movement Decoded, a movement coach's Instagram brand, into a fuller narrative treatment the coach can riff off while filming. This is not the tight, three-beat Komorebi cut, it's the working draft behind it.
+  return `You are building a script for a single Komorebi Session for Movement Decoded, a movement coach's Instagram brand, from a topic.
 Manifesto: ${MANIFESTO}
 Format rules: ${FORMAT_RULES}
 Voice rules, follow exactly: ${VOICE_RULES}
 ${ANTI_PATTERNS}
-${STORYTELLING_CRAFT}
+${FIVE_PART_ARC}
 ${voiceContext}
-The piece is filmed sitting under trees in Lisbon, lo-fi telephone-filtered voiceover, slow contemplative visuals. Build this out as a full narrative arc meant to run roughly 90 to 180 seconds once filmed, with real room for the idea to develop, not a handful of quick cuts.
-Respond ONLY with valid JSON, no markdown fences. Format:
-{"opening":"...", "throughline":"...", "shots":["...","...","..."], "closing":"..."}
-opening: the first line spoken, setting the tension.
-throughline: 2-4 sentences on how the idea develops and where it moves across the piece, this is the connective narrative, not just a summary.
-shots: an ordered list of 6 to 10 shot descriptions, each one substantial enough to carry real screen time on its own (roughly 10-20 seconds apiece), together spanning the full 90 to 180 second runtime. Each entry should pair what's said with what's visually happening.
-closing: the final line, an opening left for the viewer, not a decision handed to them.`;
+The piece is filmed sitting under trees in Lisbon, lo-fi telephone-filtered voiceover, slow contemplative visuals. The five part arc above, not the short-cut framing in the format rules, is the actual shape to follow here, it needs real room to develop across the full 90 to 180 seconds.
+${SCRIPT_RESPONSE_FORMAT}`;
+}
+
+// Brain Dump to Script: finds the script already hiding inside a raw,
+// unstructured stream-of-consciousness dump, preserving the person's own
+// language rather than rewriting it.
+export function buildBrainDumpSystemPrompt(kept, archived) {
+  const voiceContext = buildVoiceContext(kept, archived);
+
+  return `You are turning a raw, messy, stream of consciousness brain dump into a script for a Komorebi Session for Movement Decoded, a movement coach's Instagram brand.
+Manifesto: ${MANIFESTO}
+Format rules: ${FORMAT_RULES}
+Voice rules, follow exactly: ${VOICE_RULES}
+${ANTI_PATTERNS}
+${FIVE_PART_ARC}
+${voiceContext}
+First identify the core reframe hiding in the brain dump, the central thing being seen differently, that is the spine of the script. Then build it into the five part arc above.
+Preserve as much of the original language and phrasing as possible. Do not paraphrase, clean up, or improve the wording. If the person wrote something in a particular way, keep it. The goal is to find the shape already in their words, not to rewrite the content.
+The piece is filmed sitting under trees in Lisbon, lo-fi telephone-filtered voiceover, slow contemplative visuals, running roughly 90 to 180 seconds.
+${SCRIPT_RESPONSE_FORMAT}`;
 }

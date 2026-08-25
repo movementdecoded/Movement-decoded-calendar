@@ -127,6 +127,20 @@ html, body {
 
 .btn-small { padding: 5px 10px; font-size: 12px; }
 
+/* .btn's default (light cream text, faint gold border) is tuned for the
+   dark panels it's normally used on. .idea-card and .day-card sit on the
+   light parchment background, so the same button read as near-invisible
+   text there, same class of bug as the modal's error text elsewhere. */
+.idea-card .btn,
+.day-card .btn {
+  color: var(--ink);
+  border-color: rgba(43, 38, 32, 0.25);
+}
+.idea-card .btn:hover,
+.day-card .btn:hover {
+  border-color: var(--pillar-komorebi);
+}
+
 /* Calendar */
 .week-nav {
   display: flex;
@@ -483,7 +497,7 @@ html, body {
   color: var(--pillar-komorebi);
 }
 
-.build-out h3 {
+.script-beats h3 {
   font-family: var(--font-mono);
   font-size: 11px;
   text-transform: uppercase;
@@ -491,12 +505,71 @@ html, body {
   color: var(--pillar-komorebi);
   margin: 16px 0 6px;
 }
-.build-out h3:first-child { margin-top: 0; }
+.script-beats h3:first-child { margin-top: 0; }
 
-.build-out p, .build-out li {
+.script-beats p {
   font-family: var(--font-serif);
   font-size: 14.5px;
   line-height: 1.5;
 }
 
-.build-out ol { padding-left: 18px; margin: 0; }
+.claims-block {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px dashed rgba(43, 38, 32, 0.2);
+}
+
+.claims-block h3 {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+}
+
+.claim-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.claim-badge {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  color: #fff;
+}
+.claim-badge.certain { background: var(--pillar-collage); }
+.claim-badge.likely { background: var(--accent-gold-dim); }
+.claim-badge.guessing { background: var(--pillar-carousel); }
+
+.claim-quote {
+  font-family: var(--font-serif);
+  font-size: 13.5px;
+  font-style: italic;
+  line-height: 1.4;
+}
+
+/* Brain Dump to Script */
+.brain-dump-input {
+  width: 100%;
+  background: var(--bg-panel-raised);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--card-parchment);
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  padding: 12px;
+  resize: vertical;
+}
+
+.brain-dump-input:focus {
+  outline: none;
+  border-color: var(--accent-gold-dim);
+}
