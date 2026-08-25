@@ -117,7 +117,10 @@
   const api = {
     async get(path) {
       const res = await fetch(path);
-      if (!res.ok) throw new Error(`GET ${path} failed (${res.status})`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `GET ${path} failed (${res.status})`);
+      }
       return res.json();
     },
     async send(method, path, body) {
