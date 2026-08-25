@@ -99,6 +99,36 @@ export async function upsertKomorebiTopic(db, sunday_date, topic) {
     .run();
 }
 
+// What actually went out for a given day, independent of the fixed pillar
+// plan for that day — a plan can be missed or swapped. Keyed by plain
+// entry_date (not date+pillar, since it's about the day as a whole, not
+// tied to whichever pillar was planned for it). Returns a flat map of
+// entry_date -> actual text; an absent key just means nothing logged yet.
+export async function getActualPosts(db, start, end) {
+  let stmt;
+  if (start && end) {
+    stmt = db
+      .prepare("SELECT entry_date, actual FROM actual_posts WHERE entry_date >= ?1 AND entry_date <= ?2")
+      .bind(start, end);
+  } else {
+    stmt = db.prepare("SELECT entry_date, actual FROM actual_posts");
+  }
+  const { results } = await stmt.all();
+  const out = {};
+  for (const row of results || []) out[row.entry_date] = row.actual;
+  return out;
+}
+
+export async function upsertActualPost(db, entry_date, actual) {
+  await db
+    .prepare(
+      `INSERT INTO actual_posts (entry_date, actual) VALUES (?1, ?2)
+       ON CONFLICT(entry_date) DO UPDATE SET actual = excluded.actual`
+    )
+    .bind(entry_date, actual)
+    .run();
+}
+
 // Calendar card production status, keyed by a single "date:pillar" string
 // (card_key) rather than a composite key — the date is always the first
 // 10 characters (ISO YYYY-MM-DD), which range queries and the posted-topics

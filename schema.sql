@@ -46,6 +46,17 @@ CREATE TABLE IF NOT EXISTS published_content (
 CREATE INDEX IF NOT EXISTS idx_published_content_created
   ON published_content (created_at DESC);
 
+-- What actually went out for a given day, independent of the fixed pillar
+-- rhythm's plan for that day — a plan can be missed or swapped (a Collage
+-- day that ended up posting a Haiku, a Tuesday post that actually went out
+-- Wednesday). One row per calendar day, any day of the week, not just the
+-- fixed pillar days. Absence of a row (or an empty string) just means
+-- nothing's been logged for that day yet, not that nothing happened.
+CREATE TABLE IF NOT EXISTS actual_posts (
+  entry_date TEXT PRIMARY KEY,  -- ISO date (YYYY-MM-DD)
+  actual TEXT
+);
+
 -- Production status per calendar card, keyed by the specific date + pillar
 -- (not just the pillar, since each week's occurrence tracks independently)
 -- combined into one key: "YYYY-MM-DD:pillar_kind". Absence of a row means

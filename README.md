@@ -50,6 +50,9 @@ functions/
     published-content/index.js  GET (list), POST (log a title + topic +
                            full script/text for something already posted)
     published-content/[id].js   DELETE
+    actual-posts/index.js   GET (by date range), PUT (per-day upsert) —
+                           what actually went out on a given day, when it
+                           didn't match the planned pillar
     generate-ideas.js       POST — 5 new premises from Anthropic
     build-script.js         POST — five-part-arc script from a topic
                            (an idea's premise); also exports the shared
@@ -59,7 +62,7 @@ functions/
                            unstructured brain dump, preserving its wording
 schema.sql                D1 schema, fresh-install baseline (ideas,
                            profile, komorebi_topics, card_status,
-                           published_content)
+                           published_content, actual_posts)
 migrations/                one-off SQL upgrades for an already-deployed
                            database — apply in order, once each
 wrangler.toml              Pages project config + D1 binding
@@ -189,6 +192,7 @@ push — D1 has no "run migrations on deploy" wiring here. Apply each file in
 wrangler d1 execute movement_decoded_db --remote --file=migrations/0002_remove_archived_status.sql
 wrangler d1 execute movement_decoded_db --remote --file=migrations/0003_five_part_arc_and_keep_script.sql
 wrangler d1 execute movement_decoded_db --remote --file=migrations/0004_published_content.sql
+wrangler d1 execute movement_decoded_db --remote --file=migrations/0005_actual_posts.sql
 ```
 
 No terminal needed either: paste the file's contents into the Cloudflare
@@ -212,7 +216,11 @@ the pillar, since each week's occurrence tracks independently), and
 `published_content` (a manually-logged record of what's actually gone out
 — `title`, `topic`, and the full `script`/caption text — fed into idea and
 script generation as both a repeat-avoidance list and a tone reference; see
-**Prompt design notes** below). Absence of a `card_status` row means `none`
+**Prompt design notes** below), and `actual_posts` (one optional row per
+calendar day — any day, not just pillar days — recording what actually
+went out when it didn't match the plan; keyed by plain `entry_date`, not
+`card_key`, since it's about the day as a whole rather than tied to
+whichever pillar was planned). Absence of a `card_status` row means `none`
 (not set, the default grey state), distinct from `red` (not started) —
 moving off grey is a deliberate action.
 
@@ -249,6 +257,11 @@ generation prompts (idea generation, Topic Builder, Brain Dump to Script):
 
 See `buildPublishedTopicsContext` / `buildPublishedToneContext` in
 `prompts.js`.
+
+Each logged entry in the list is clickable, opening a popup with the
+title, the `topic` field doubling as a one-line brief, and the full
+`script` text — a quick reference view back into a past post, reusing the
+same field set as the log form rather than adding a separate brief field.
 
 ## Script builder: the five-part arc
 
@@ -311,8 +324,17 @@ date range, computed relative to today's actual week rather than to
 wherever the nav currently sits, so it never mislabels itself while
 browsing other weeks.
 
+Every day — pillar or not — shows two stacked sections: **Planned** (the
+pillar tag, Friday's script/film reminder, or a plain "—") on top, and
+**Actual** underneath, a small free-text field for what really went out
+when it didn't match the plan (a Collage day that posted a Haiku, a
+Tuesday post that actually went out Wednesday). It autosaves per exact
+date (`entry_date`, independent of pillar) and sits directly on the card
+rather than behind tap-to-expand, since it's meant to be glanced at
+alongside the plan.
+
 Each pillar day (Collage/Haiku/Komorebi, plus Carousel on alternating bonus
-Mondays) shows only its pillar title by default. Two separate interactions:
+Mondays) also gets two more interactions:
 
 - **The small circular dot** (top-right corner) cycles a card's production
   status independently of the pillar color: none/not set (grey) → not
@@ -358,12 +380,16 @@ nothing new to fill in.
 8. Log an entry in the Published Content Log (title, topic, full script
    text), then generate a fresh batch of ideas or build a script and
    confirm the model avoids that logged topic and leans toward that script's
-   tone
+   tone; click the logged entry and confirm the popup shows its title,
+   topic (as the brief), and full script
 9. Confirm the calendar shows two weeks stacked (current on top, next
    underneath), that navigating with prev/next/Today relabels each block
    correctly, and that every card in a row is the same height even when one
    day (e.g. Friday) has more static content than its neighbors
-10. Reload the page (or open it on a different device) and confirm the
-    persisted state (ideas, kept scripts, topics, card statuses, profile,
-    published content log) came back — an unkept script is ephemeral by
-    design and won't persist
+10. On any day (pillar or not), type something into its Actual field,
+    reload, and confirm it persisted independently of that day's planned
+    pillar and status
+11. Reload the page (or open it on a different device) and confirm the
+    persisted state (ideas, kept scripts, topics, card statuses, actual
+    posts, profile, published content log) came back — an unkept script is
+    ephemeral by design and won't persist

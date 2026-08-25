@@ -171,7 +171,7 @@
   const calendarGridCurrentEl = document.getElementById("calendar-grid-current");
   const calendarGridNextEl = document.getElementById("calendar-grid-next");
 
-  function renderWeekGrid(gridEl, monday, todayISO, statuses, topics) {
+  function renderWeekGrid(gridEl, monday, todayISO, statuses, topics, actuals) {
     gridEl.innerHTML = "";
     const carouselWeek = isCarouselMonday(monday);
     WEEKDAY_LABELS.forEach((label, i) => {
@@ -179,7 +179,7 @@
       const iso = toISODate(date);
       const pillar = pillarForDay(label, carouselWeek);
       gridEl.appendChild(
-        buildDayCard({ label, date, iso, pillar, isToday: iso === todayISO, statuses, topics })
+        buildDayCard({ label, date, iso, pillar, isToday: iso === todayISO, statuses, topics, actuals })
       );
     });
   }
@@ -218,12 +218,20 @@
       // Non-fatal: cards fall back to "not started".
     }
 
+    let actuals = {};
+    try {
+      const data = await api.get(`/api/actual-posts?start=${rangeStartISO}&end=${rangeEndISO}`);
+      actuals = data.actuals || {};
+    } catch (_) {
+      // Non-fatal: the actual-post field just starts blank.
+    }
+
     const todayISO = toISODate(new Date());
-    renderWeekGrid(calendarGridCurrentEl, currentMonday, todayISO, statuses, topics);
-    renderWeekGrid(calendarGridNextEl, nextMonday, todayISO, statuses, topics);
+    renderWeekGrid(calendarGridCurrentEl, currentMonday, todayISO, statuses, topics, actuals);
+    renderWeekGrid(calendarGridNextEl, nextMonday, todayISO, statuses, topics, actuals);
   }
 
-  function buildDayCard({ label, date, iso, pillar, isToday, statuses, topics }) {
+  function buildDayCard({ label, date, iso, pillar, isToday, statuses, topics, actuals }) {
     const card = document.createElement("div");
     card.className = "day-card" + (isToday ? " is-today" : "") + (pillar ? " is-expandable" : "");
 
@@ -232,27 +240,75 @@
     head.innerHTML = `<span>${label}</span><span class="day-date">${date.getDate()}</span>`;
     card.appendChild(head);
 
+    // Planned section: what the fixed rhythm calls for on this day. Every
+    // day gets one, even the days with no pillar, so "planned" and
+    // "actual" (below) always read as a consistent pair.
+    const planned = document.createElement("div");
+    planned.className = "day-planned";
+    if (pillar) {
+      const info = PILLAR_INFO[pillar];
+      const tag = document.createElement("span");
+      tag.className = `pillar-tag ${info.cls}`;
+      tag.textContent = info.label;
+      planned.appendChild(tag);
+    } else if (label === "Fri") {
+      const note = document.createElement("div");
+      note.className = "day-note";
+      note.textContent = "Script & film Sunday's Komorebi Session by today.";
+      planned.appendChild(note);
+    } else {
+      const tag = document.createElement("span");
+      tag.className = "pillar-tag none";
+      tag.textContent = "—";
+      planned.appendChild(tag);
+    }
+    card.appendChild(planned);
+
+    // Actual section: what really went out, for when the plan above was
+    // missed or swapped (a Collage day that posted a Haiku, a Tuesday
+    // post that actually went out Wednesday). Free text, every day of the
+    // week, independent of whether the day has a pillar at all. Sits
+    // directly on the card (not behind tap-to-expand) since it's meant to
+    // be glanced at alongside the plan, not dug for.
+    const actualWrap = document.createElement("div");
+    actualWrap.className = "day-actual";
+    const actualLabel = document.createElement("span");
+    actualLabel.className = "day-actual-label";
+    actualLabel.textContent = "Actual";
+    const actualInput = document.createElement("input");
+    actualInput.type = "text";
+    actualInput.className = "actual-input";
+    actualInput.placeholder = "What actually went out…";
+    actualInput.value = (actuals && actuals[iso]) || "";
+    // Typing/clicking into the field shouldn't also toggle the card's
+    // tap-to-expand (pillar days only, but harmless to guard always).
+    actualInput.addEventListener("click", (e) => e.stopPropagation());
+    const actualSaved = document.createElement("span");
+    actualSaved.className = "actual-saved";
+
+    let actualSaveTimer = null;
+    actualInput.addEventListener("input", () => {
+      actualSaved.textContent = "";
+      clearTimeout(actualSaveTimer);
+      actualSaveTimer = setTimeout(async () => {
+        try {
+          await api.send("PUT", "/api/actual-posts", { entry_date: iso, actual: actualInput.value });
+          actualSaved.textContent = "saved";
+          setTimeout(() => (actualSaved.textContent = ""), 1500);
+        } catch (_) {
+          actualSaved.textContent = "save failed";
+        }
+      }, 600);
+    });
+
+    actualWrap.append(actualLabel, actualInput, actualSaved);
+    card.appendChild(actualWrap);
+
     if (!pillar) {
-      if (label === "Fri") {
-        const note = document.createElement("div");
-        note.className = "day-note";
-        note.textContent = "Script & film Sunday's Komorebi Session by today.";
-        card.appendChild(note);
-      } else {
-        const tag = document.createElement("span");
-        tag.className = "pillar-tag none";
-        tag.textContent = "—";
-        card.appendChild(tag);
-      }
       return card;
     }
 
     const info = PILLAR_INFO[pillar];
-
-    const tag = document.createElement("span");
-    tag.className = `pillar-tag ${info.cls}`;
-    tag.textContent = info.label;
-    card.appendChild(tag);
 
     // Status toggle (a small dot) — a separate signal from the pillar
     // color above. The expanded sheet below repeats this as labeled
@@ -432,12 +488,37 @@
     publishedStatusEl.className = "status-line" + (isError ? " error" : "");
   }
 
+  // Detail popup: title, the topic field doubling as a one-line brief, and
+  // the full script/text, for glancing back at a past post's reference.
+  const publishedModalBackdrop = document.getElementById("published-modal-backdrop");
+  const publishedModalTitle = document.getElementById("published-modal-title");
+  const publishedModalBrief = document.getElementById("published-modal-brief");
+  const publishedModalScript = document.getElementById("published-modal-script");
+
+  function openPublishedModal(item) {
+    publishedModalTitle.textContent = item.title;
+    publishedModalBrief.textContent = item.topic;
+    publishedModalScript.textContent = item.script;
+    publishedModalBackdrop.hidden = false;
+  }
+
+  document.getElementById("published-modal-close").addEventListener("click", () => {
+    publishedModalBackdrop.hidden = true;
+  });
+  publishedModalBackdrop.addEventListener("click", (e) => {
+    if (e.target === publishedModalBackdrop) publishedModalBackdrop.hidden = true;
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !publishedModalBackdrop.hidden) publishedModalBackdrop.hidden = true;
+  });
+
   function publishedRow(item) {
     const row = document.createElement("div");
     row.className = "published-row";
 
     const main = document.createElement("div");
     main.className = "published-row-main";
+    main.addEventListener("click", () => openPublishedModal(item));
     const title = document.createElement("div");
     title.className = "published-row-title";
     title.textContent = item.title;
