@@ -191,7 +191,14 @@ html, body {
 
 .calendar-grid {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  /* minmax(0, 1fr), not bare 1fr: a plain `1fr` track still refuses to
+     shrink below its content's min-content width (the classic CSS Grid
+     "blowout" bug) — once cards grew a label+input+status row, that
+     min-content stopped fitting 7 across, and the whole grid pushed past
+     .app's max-width instead of the tracks compressing, forcing the page
+     itself to scroll horizontally. minmax(0, ...) removes that content-
+     driven floor so the tracks actually share the available width. */
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   /* Default (stretch) alignment: every card in a row fills the row's
      height, so a day with more static content (Friday's note) doesn't
      leave the rest of the row ragged. This relies on day-details (below)
@@ -206,6 +213,11 @@ html, body {
 }
 
 .day-card {
+  /* Grid items, like flex items, default to min-width:auto (their own
+     min-content size) even inside a minmax(0, 1fr) track — this overrides
+     that so the card can actually shrink to its track's width instead of
+     forcing the track wider. Paired with the minmax(0, 1fr) fix above. */
+  min-width: 0;
   background: var(--card-parchment);
   color: var(--ink);
   border-radius: 10px;
